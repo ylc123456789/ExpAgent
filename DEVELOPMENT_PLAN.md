@@ -1,63 +1,49 @@
-﻿# ExpAgent 开发文档
+# ExpAgent 开发文档 (v2)
 
 ## 1. 模块定位
 
-ExpAgent 是完整科研 agent 中的“实验设计模块”。
+ExpAgent 是完整科研 agent 中的"实验设计模块"，**以 LLM 为核心引擎**，确定性规则只做最基础的安全网。
 
-它负责把研究想法、文献现状、已有代码能力、算力预算，转化为结构化实验计划。它不直接写代码、不直接训练模型、不直接复现论文，而是生成可以交给其他模块执行的任务。
-
-核心目标：
-
-```text
-research idea -> experiment plan -> coding/reproduction/run tasks
+```
+research idea → LLM 推理 → experiment_plan.yaml → 交给下游 agent 执行
+                                          │
+                                          └── coding_tasks  (→ CodingAgent)
+                                          └── repro_tasks   (→ ReproAgent)
+                                          └── run_tasks     (→ Runner)
+                                          └── analysis_plan (→ AnalysisAgent)
 ```
 
-它连接：
+在系统中的位置：
 
-```text
-LiteratureAgent -> ExperimentDesigner -> CodingAgent
-                                   -> ReproAgent
-                                   -> Runner / AnalysisAgent
 ```
+LiteratureAgent / IdeaAgent / 用户想法
+              ↓
+         ExpAgent (纯设计，不调度)
+              ↓
+    experiment_plan.yaml (静态文件)
+              ↓
+      Orchestrator (未来模块，负责调度执行)
+         ├── → CodingAgent
+         ├── → ReproAgent (可并行多个)
+         └── → Runner
+```
+
+ExpAgent **不负责调度执行**。它输出静态的 `experiment_plan.yaml`，由未来的 Orchestrator 决定如何并行调度。这样 ExpAgent 保持简单、可测试，不关心并发和运维问题。
 
 ## 2. 不做什么
 
-MVP 阶段不要做：
-
-```text
-不直接写代码
-不直接改 repo
-不直接跑训练
-不自动检索论文
-不写论文正文
-不做复杂多 agent 黑板系统
-```
-
-这些分别交给：
-
-```text
-CodingAgent        写代码/改代码
-ReproAgent         复现别人方法/baseline
-LiteratureAgent    查论文/SOTA/代码
-WritingAgent       写论文
-AnalysisAgent      分析结果/画图
-```
-
-ExpAgent 只负责“设计实验”。
+- 不直接写代码 (CodingAgent)
+- 不直接改 repo (CodingAgent)
+- 不直接跑训练 (Runner)
+- 不自动检索论文 (LiteratureAgent)
+- 不写论文正文 (WritingAgent)
+- **不调度/编排下游 agent (Orchestrator)**
 
 ## 3. 输入
 
-MVP 输入：
-
 ```yaml
-research_idea: "想验证的新方法或研究假设"
-target_task: "任务类型，比如 image classification / time series / NLP / GNN"
-base_repo: "已有代码仓库路径或 URL，可选"
-available_methods:
-  - "已有自己的方法"
-  - "已有 baseline"
-literature_context:
-  - "相关论文摘要/SOTA 信息，可选"
+research_idea: "想验证的新方法或研究假设"  # 必填
+target_task: "任务类型, e.g. image classification / time series"  # 必填
 compute_budget:
   gpu: "RTX 4090 / A100 / CPU only"
   max_runtime: "2 hours"
@@ -65,22 +51,28 @@ compute_budget:
 constraints:
   - "不能下载大数据集"
   - "先做小规模验证"
+literature_context:  # 可选，来自 LiteratureAgent
+  - "相关论文摘要/SOTA 信息"
+existing_assets:  # 可选，用户已有的代码/数据/baseline
+  implemented_methods:
+    - name: "my_attention_variant"
+      location: "/path/to/repo/models/attention.py"
+  available_datasets:
+    - "CIFAR-10 (已下载)"
+  known_baselines:
+    - "ResNet-50 在 ImageNet 上的结果 (已知但未实现)"
 ```
 
-最小 CLI 可以是：
+### 关于 existing_assets
 
-```bash
-experiment-designer plan \
-  --idea idea.md \
-  --context context.md \
-  --output experiment_plan.yaml
-```
+`available_methods` 不再是输入。ExpAgent 应该自己推理需要对比哪些 baseline、设计哪些 ablation。
+用户只需要通过 `existing_assets` 告诉 ExpAgent 已经有什么，避免重复工作。
+LLM 负责补全"还缺什么"。
 
 ## 4. 输出
 
-核心输出是 `experiment_plan.yaml`。
-
-推荐结构：
+核心输出是 **`experiment_plan.yaml`**，机器和人都可读，不再需要单独的 `human_review.md`。
+所有设计理由内嵌在 YAML 各字段的 `rationale` 中。
 
 ```yaml
 version: 1
@@ -89,34 +81,38 @@ goal:
   summary: "本轮实验要验证什么"
   hypothesis: "如果方法有效，应该观察到什么现象"
   success_criteria:
-    - "metric A 高于 baseline"
-    - "runtime 不超过某个范围"
+    - "metric A 高于 baseline X 至少 Y%"
+    - "runtime 不超过 Z"
 
 experiment_matrix:
   datasets:
     - name: MNIST
       split: standard
-      reason: "轻量验证"
+      rationale: "轻量验证，快速迭代"
   methods:
     - name: proposed_method
       type: new_method
       implementation_status: needs_code
-    - name: baseline_1
+      rationale: "本次要验证的核心方法"
+    - name: resnet18_baseline
       type: baseline
-      implementation_status: existing_or_repro
+      implementation_status: needs_repro
+      rationale: "最通用的图像分类基线，几乎所有论文都报告"
   metrics:
-    - accuracy
-    - loss
-    - runtime
+    - name: accuracy
+      rationale: "主要评估指标"
+    - name: loss
+    - name: runtime
 
 tasks:
   coding_tasks:
     - id: code_001
-      goal: "在现有 repo 中实现 proposed_method"
-      target_files:
-        - "models/"
+      repo_path: "/path/to/repo"
+      task_goal: "在 models/ 中实现 proposed_method"
       constraints:
         - "不改变 baseline 训练流程"
+      verify_commands:
+        - "python -m pytest tests/test_model.py"
       expected_artifacts:
         - "patch.diff"
         - "verification_report.md"
@@ -125,10 +121,10 @@ tasks:
     - id: repro_001
       paper_url: "..."
       repo_url: "..."
-      goal: "复现 baseline 方法的小规模实验"
-      expected_artifacts:
-        - "result.md"
-        - "logs/"
+      experiment_goal: "复现 baseline 方法的小规模实验"
+      compute_budget:
+        max_runtime: "1 hour"
+        gpu_required: true
 
   run_tasks:
     - id: run_001
@@ -138,7 +134,7 @@ tasks:
 
 analysis_plan:
   comparisons:
-    - proposed_method vs baseline_1
+    - proposed_method vs resnet18_baseline
   plots:
     - "accuracy curve"
     - "loss curve"
@@ -147,240 +143,189 @@ analysis_plan:
     - "是否参数量显著增加"
 
 risks:
-  - "baseline 代码可能无法复现"
-  - "数据集下载可能失败"
-  - "当前实验只是 bounded，不等价于完整论文实验"
+  - description: "baseline 代码可能无法复现"
+    mitigation: "准备多个候选 baseline"
+  - description: "当前实验只是 bounded，不等价于完整论文实验"
 ```
 
-## 5. 工作流
+## 5. 工作流 (LLM-driven)
 
-MVP 使用线性 workflow，不做复杂黑板架构。
-
-```text
-1. 读取研究想法和上下文
-2. 识别实验目标
-3. 拆分假设
-4. 设计 baseline / ablation / metric / dataset
-5. 判断哪些任务需要写代码
-6. 判断哪些任务需要调用 ReproAgent
-7. 判断哪些任务可以直接运行
-8. 生成 experiment_plan.yaml
-9. 生成 human_review.md
+```
+1. 读取 research_idea + context
+2. LLM 分析 idea → 识别假设、推断所需 baseline/ablation/dataset
+3. LLM 生成 experiment_plan 结构化输出 (YAML)
+4. Pydantic 解析 + 兜底校验
+5. Validator 确定性检查 (hypothesis/baseline/metric/dataset/risk 必须齐全)
+6. 若 validation 不通过 → 把 issues 返回给 LLM 做 revision
+7. 写入 experiment_plan.yaml
 ```
 
-## 6. 和 CodingAgent 的关系
+## 6. 架构原则
 
-ExpAgent 不调用 CodingAgent 也可以独立运行。
+**LLM-first**：核心推理由 LLM 完成。代码层只做：
+- 组装 prompt
+- 调用 LLM
+- 解析/校验 LLM 输出
+- 写文件
 
-但它输出的 `coding_tasks` 应该能被 CodingAgent 直接消费。
+**确定性规则只做安全网**：
+- 检查 LLM 输出是否可以解析为合法的 ExperimentPlan
+- 检查关键字段是否缺失 (hypothesis/baseline/metric/dataset/risk)
+- 检查 coding_tasks 和 repro_tasks 的格式是否可被下游消费
 
-Coding task 格式要明确：
+**Artifact first**：每一步产出可保存、可审计的文件。
 
-```yaml
-id: code_001
-repo_path: "/path/to/repo"
-task_goal: "实现某个模块"
-constraints:
-  - "不要改动训练入口"
-  - "不要改变 baseline 行为"
-verify_commands:
-  - "python -m pytest tests/test_model.py"
-expected_output:
-  - "patch.diff"
-  - "report.md"
+**与下游解耦**：ExpAgent 通过配置存储 reproagent_path 和 codingagent_path，采用 CLI arg → 环境变量 → config 文件的三级优先级（与 ReproAgent → CodingAgent 的对接方式一致）。MVP 阶段只验证路径存在，不实际调用。
+
+## 7. 和 CodingAgent / ReproAgent 的关系
+
+### 对接方式
+
+照搬 ReproAgent 的 `integrations/codingagent.py` 模式：
+
+```python
+# ExpAgent config (config.yaml)
+agents:
+  reproagent_path: /home/cyl/reproagent
+  codingagent_path: /home/cyl/CodingAgent
 ```
 
-原则：
+路径解析优先级：CLI arg > 环境变量 > config 文件。
 
-```text
-ExpAgent 负责说清楚要改什么、为什么改、怎么验证。
-CodingAgent 负责实际修改代码。
+### Task 格式对齐
+
+ExpAgent 的 `coding_tasks` 直接映射到 `CodeTaskSpec` 字段：
+
+| ExpAgent field | CodeTaskSpec field |
+|---|---|
+| `repo_path` | `repo_path` |
+| `task_goal` | `task_goal` |
+| `constraints` | `constraints` |
+| `verify_commands` | `verify_commands` |
+
+ExpAgent 的 `repro_tasks` 直接映射到 `ReproTask` 字段：
+
+| ExpAgent field | ReproTask field |
+|---|---|
+| `paper_url` | `paper_url` |
+| `repo_url` | `repo_url` |
+| `experiment_goal` | `experiment_goal` |
+
+### MVP 阶段
+
+ExpAgent **不实际调用** CodingAgent / ReproAgent。
+它只做：
+1. 验证配置的 agent 路径存在且合法
+2. 输出的 task 格式对齐下游 schema
+3. 未来由 Orchestrator 读取 experiment_plan.yaml 并调度执行
+
+**ExpAgent 不能修改 CodingAgent / ReproAgent 的代码**。如果需要下游做改动，由本文档记录需求，在对应 agent 的会话中处理。
+
+## 8. 项目结构
+
 ```
-
-## 7. 和 ReproAgent 的关系
-
-ExpAgent 输出 `repro_tasks`，交给 ReproAgent 跑 baseline 或 SOTA。
-
-Repro task 格式：
-
-```yaml
-id: repro_001
-paper_url: "..."
-repo_url: "..."
-experiment_goal: "复现该方法在某数据集上的 bounded 结果"
-compute_budget:
-  max_runtime: "1 hour"
-  gpu_required: true
-expected_metrics:
-  - accuracy
-  - loss
-  - runtime
-```
-
-原则：
-
-```text
-ExpAgent 负责决定该复现谁。
-ReproAgent 负责尝试把别人代码跑起来。
-```
-
-## 8. 内部文件结构
-
-建议项目结构：
-
-```text
 ExpAgent/
   README.md
   DEVELOPMENT_PLAN.md
   pyproject.toml
+  config.yaml                    # agent 路径配置
   src/experiment_designer/
     __init__.py
-    main.py          # CLI
-    models.py        # Pydantic 数据结构
-    llm.py           # LLM 调用
-    planner.py       # 实验计划生成
-    validator.py     # plan validation
-    report.py        # 写 yaml/md
-    prompts.py       # prompt 模板
+    main.py                      # CLI
+    models.py                    # Pydantic 数据结构
+    llm.py                       # LLM 调用 (urllib, 与 ReproAgent 风格一致)
+    planner.py                   # LLM 驱动的实验计划生成
+    prompts.py                   # system prompt + user prompt 模板
+    validator.py                 # 确定性兜底校验
+    report.py                    # 写 experiment_plan.yaml
+    config.py                    # agent 路径解析 (CLI > env > config)
   tests/
     test_models.py
     test_planner.py
     test_validator.py
 ```
 
-## 9. 核心模型
+## 9. 核心数据模型
 
-建议先定义这些 Pydantic model：
+```python
+# 输入
+DesignInput         # 研究想法 + 上下文 + 预算 + 约束
+ExistingAssets      # 用户已有的代码/数据/baseline
 
-```text
-DesignInput
-ResearchGoal
-ExperimentPlan
-ExperimentMatrix
-CodingTask
-ReproTask
-RunTask
-AnalysisPlan
-Risk
+# 输出
+ExperimentPlan      # 顶层结构
+ResearchGoal        # goal 部分
+ExperimentMatrix    # datasets / methods / metrics
+CodingTask          # 对齐 CodeTaskSpec
+ReproTask           # 对齐 ReproTask
+RunTask             # 运行任务
+AnalysisPlan        # 分析计划
+Risk                # 风险 + 缓解措施
+
+# 校验
+ValidationResult    # status + issues list
 ```
 
-不要一开始设计太多抽象类。先把输入输出稳定下来。
+## 10. Plan Validation (确定性安全网)
 
-## 10. Plan Validation
+必须检查：
 
-必须有一个轻量 validation，防止 LLM 生成空泛计划。
+- 是否有明确 hypothesis
+- 是否有 baseline（至少一个）
+- 是否有 metric（至少一个）
+- 是否有 dataset 或数据来源
+- 是否区分 proposed / baseline / ablation
+- 是否说明算力预算
+- 是否把 coding_tasks 和 repro_tasks 拆开
+- 是否有成功标准 (success_criteria)
+- 是否有风险 + 缓解措施
 
-检查项：
-
-```text
-是否有明确 hypothesis
-是否有 baseline
-是否有 metric
-是否有 dataset 或数据来源
-是否区分 proposed / baseline / ablation
-是否说明算力预算
-是否把写代码任务和复现任务拆开
-是否标注 bounded/full experiment
-是否有成功标准
-是否有风险和失败处理
-```
-
-如果不满足，输出：
-
-```yaml
-status: needs_revision
-issues:
-  - "缺少 baseline"
-  - "没有明确 metric"
-```
+不通过时返回 `ValidationResult(status="needs_revision", issues=[...])`，由 planner 将 issues 反馈给 LLM 重新生成。
 
 ## 11. MVP 成功标准
 
-MVP 不要求真的跑实验。
-
-只要做到：
-
-```text
-输入一个 research idea
-输出一个结构化 experiment_plan.yaml
-能拆出 coding_tasks / repro_tasks / run_tasks
-能解释实验设计理由
-能指出风险和缺口
-有基本 tests
-```
-
-就算第一版成功。
+- 输入 research_idea → 输出结构化 experiment_plan.yaml
+- LLM 驱动，非模板填充
+- 能拆出 coding_tasks / repro_tasks / run_tasks
+- 每个决策有 rationale
+- 能指出风险和缓解措施
+- Validator 兜底，防止空泛输出
+- 有基本 tests
+- 使用 ResAgent 共享虚拟环境
 
 ## 12. 推荐开发顺序
 
-第一阶段：
+### Phase 1: 骨架
+1. pyproject.toml + package 结构
+2. models.py (所有 Pydantic models)
+3. config.py (agent 路径解析)
+4. llm.py (OpenAI-compatible client)
+5. tests/test_models.py
 
-```text
-1. 建 repo 和 pyproject
-2. 定义 models.py
-3. 做 mock LLM planner
-4. 输出 experiment_plan.yaml 和 human_review.md
-5. 写 validation
-6. 加 CLI
-```
+### Phase 2: 核心
+6. prompts.py (system prompt + user prompt)
+7. planner.py (LLM 调用 → YAML 解析 → ExperimentPlan)
+8. validator.py (确定性兜底)
+9. report.py (写 experiment_plan.yaml)
+10. tests/test_planner.py + test_validator.py
 
-第二阶段：
+### Phase 3: CLI + 集成
+11. main.py (CLI: experiment-designer plan ...)
+12. 用几个真实 idea 测试端到端流程
 
-```text
-1. 接真实 LLM
-2. 加 OpenAI-compatible API
-3. 增加 prompt 模板
-4. 用几个真实 idea 测试
-```
+## 13. 下游解耦需求 (给 ReproAgent / CodingAgent)
 
-第三阶段：
+本文档记录了 ExpAgent 对下游模块的接口需求，由对应会话处理。
 
-```text
-1. 对接 CodingAgent task format
-2. 对接 ReproAgent task format
-3. 让 Orchestrator 调用它
-```
+### 对 ReproAgent 的需求
+- 支持通过 `--codingagent-path` CLI 参数传递 CodingAgent 路径 (已实现 ✓)
+- 支持通过 `CODINGAGENT_PATH` 环境变量 (已实现 ✓)
+- 支持通过 config 文件配置 (已实现 ✓)
 
-## 13. 关键原则
+### 对 CodingAgent 的需求
+- 提供稳定的 CLI 或 Python API
+- 接受结构化 task 输入
+- 返回结构化结果
+- 可从 CodingAgent repo 外部调用
 
-```text
-Artifact first.
-```
-
-每一步都要产出可保存、可审计、可传给其他模块的文件。
-
-不要只返回一段自然语言。
-
-核心产物应该是：
-
-```text
-experiment_plan.yaml
-human_review.md
-validation_report.md
-```
-
-## 14. 未来集成位置
-
-在完整科研 agent 中，ExpAgent 应该被 Orchestrator 调用，而不是直接控制全局流程。
-
-典型上游输入：
-
-```text
-LiteratureAgent 的论文地图
-IdeaAgent 的研究假设
-用户给定的研究想法
-已有 repo / 方法描述
-算力预算
-```
-
-典型下游输出：
-
-```text
-给 CodingAgent 的 coding_tasks
-给 ReproAgent 的 repro_tasks
-给 Runner 的 run_tasks
-给 AnalysisAgent 的 analysis_plan
-```
-
-第一版只需要把这些任务结构化写入文件，不需要真的调用下游模块。
-
+详见 `docs/downstream_decoupling_requirements.md`。

@@ -1,0 +1,14 @@
+# ExpAgent configuration
+# All paths can be overridden via CLI arguments or environment variables.
+
+agents:
+  # Path to ReproAgent checkout (or set REPROAGENT_PATH env var)
+  reproagent_path: /home/cyl/reproagent
+  # Path to CodingAgent checkout (or set CODINGAGENT_PATH env var)
+  codingagent_path: /home/cyl/CodingAgent
+
+llm:
+  # OpenAI-compatible API settings (or use CLI flags)
+  model: deepseek-chat
+  api_base: https://api.deepseek.com/v1
+  api_key_env: DEEPSEEK_API_KEY

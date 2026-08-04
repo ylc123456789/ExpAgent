@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "experiment-designer"
+version = "0.1.0"
+description = "LLM-first experiment design agent for ML research"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.0",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+expagent = "experiment_designer.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["experiment_designer*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+markers = [
+    "e2e: slow end-to-end tests that call real LLM APIs",
+]
+addopts = "-m \"not e2e\""
