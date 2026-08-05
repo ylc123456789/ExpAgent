@@ -23,13 +23,6 @@ class LoopState:
     file_cache: dict[str, str] = field(default_factory=dict)  # path → content
 
 
-def build_initial_prompt(state: LoopState) -> str:
-    """Build the very first user prompt — called once at loop start."""
-    parts = [state.situation]
-    parts.append("\n---\nAnalyze the situation. Use search_papers to find baselines, read_file to inspect artifacts, then finish with your ScientificDecision.")
-    return "\n".join(parts)
-
-
 def build_turn_prompt(state: LoopState, policy: ContextPolicy) -> str:
     """Build a fresh user prompt from structured state each turn.
 

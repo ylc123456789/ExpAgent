@@ -62,13 +62,14 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
     tool_pairs: list[dict] = []   # recent tool pairs for FC continuity
 
     for step in range(1, MAX_STEPS + MAX_EXTRA_AFTER_PROGRESS + 1):
-        remaining = effective_max - step if step <= effective_max else 0
+        if step > effective_max and effective_max >= MAX_STEPS:
+            break  # no extra progress granted, stop at base budget
 
         # Rebuild user prompt from state each turn (CodingAgent style)
         user_prompt = build_turn_prompt(state, policy)
 
         # Grace stop pressure
-        if step >= effective_max - 2 or (step >= MAX_STEPS - 2 and effective_max == MAX_STEPS):
+        if step >= effective_max - 2:
             user_prompt += (
                 "\n\n[GRACE STOP: Very few steps remain. "
                 "You MUST call finish now with your best scientific judgment.]"

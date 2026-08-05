@@ -200,42 +200,6 @@ def build_initial_prompt(ctx: AdvisorContext) -> str:
     return "\n".join(parts)
 
 
-def build_turn_prompt(
-    context: str,
-    action_history: list[dict],
-    last_result: str,
-    remaining_steps: int,
-) -> str:
-    """Build a fresh prompt for the next turn in the agentic loop.
-
-    Args:
-        context: The original situation description.
-        action_history: List of previous (action, result) pairs.
-        last_result: The result of the most recent tool call.
-        remaining_steps: Steps remaining before forced finish.
-    """
-    parts: list[str] = []
-
-    parts.append("## Situation")
-    parts.append(context)
-
-    if action_history:
-        parts.append("\n## Previous Actions")
-        for entry in action_history[-8:]:
-            parts.append(f"- {entry['action']}: {entry['summary']}")
-
-    if last_result:
-        parts.append("\n## Last Result")
-        # Limit the last result to avoid overflowing context
-        parts.append(last_result[:4000])
-
-    if remaining_steps <= 2:
-        parts.append(f"\nOnly {remaining_steps} step(s) remain. You MUST call finish next.")
-
-    parts.append("\nWhat is your next action? Return JSON.")
-    return "\n".join(parts)
-
-
 # ── Backward-compatible plan/revise prompt builders ──────────────
 # These are used by planner.py (v1 wrapper) which delegates to advise().
 # They translate DesignInput / revision feedback into the situation string

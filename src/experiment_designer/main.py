@@ -332,7 +332,7 @@ def _print_help() -> None:
     print()
     print("  Commands:")
     print("  /help              Show this message")
-    print("  /view [section]    View current plan (section: goal|matrix|tasks|risks|all)")
+    print("  /view [section]    View current plan (section: goal|matrix|tasks|risks|analysis)")
     print("  /save [path]       Save plan to directory (default: runs/<timestamp>/)")
     print("  /load <path>       Load a saved plan")
     print("  /idea              Show the original research idea")
@@ -383,8 +383,7 @@ def _print_plan_full(plan: ExperimentPlan, section: str = "") -> None:
 
     data = plan.model_dump(exclude_defaults=False)
 
-    if section:
-        # Filter to specific section
+    if section and section != "all":
         section_map = {
             "goal": ["goal"],
             "matrix": ["experiment_matrix"],
@@ -395,7 +394,7 @@ def _print_plan_full(plan: ExperimentPlan, section: str = "") -> None:
         keys = section_map.get(section, [section])
         data = {k: v for k, v in data.items() if k in keys}
         if not data:
-            _print_warn(f"No section matching '{section}'. Available: goal, matrix, tasks, risks, analysis, all")
+            _print_warn(f"No section matching '{section}'. Available: goal, matrix, tasks, risks, analysis")
             return
 
     lines = yaml.dump(data, allow_unicode=True, sort_keys=False).strip()
