@@ -177,3 +177,246 @@ class ValidationResult(BaseModel):
 
     status: Literal["ok", "needs_revision"]
     issues: list[str] = Field(default_factory=list)
+
+
+# ── v2: Scientific Advisor models ─────────────────────────────────
+
+
+class ArtifactRef(BaseModel):
+    """Reference to a result artifact passed by ResAgent.
+
+    ExpAgent does not scan directories — ResAgent provides these.
+    """
+
+    id: str = Field(description="Unique artifact id, e.g. 'repro_result_001'")
+    type: Literal["repro_result", "code_patch", "run_log", "metric_summary", "other"] = "other"
+    path: str | None = Field(default=None, description="File path ExpAgent can read")
+    summary: str = Field(default="", description="Brief summary provided by ResAgent")
+
+
+class AdvisorContext(BaseModel):
+    """Input to ExpAgent's advise() function — everything ExpAgent needs to know."""
+
+    situation: str = Field(
+        description="Natural language description of current situation. "
+                    "ResAgent describes: the research idea, what happened, "
+                    "what results were obtained, what failed, etc."
+    )
+    artifacts: list[ArtifactRef] = Field(
+        default_factory=list,
+        description="Relevant result files ExpAgent can read",
+    )
+    existing_plan: ExperimentPlan | None = Field(
+        default=None,
+        description="Current experiment plan, if one exists (for revision/analysis)",
+    )
+
+
+class ScientificConclusion(BaseModel):
+    """The scientific conclusion ExpAgent reaches."""
+
+    status: Literal[
+        "supported", "not_supported", "inconclusive", "needs_more_experiments"
+    ] = Field(description="Whether the evidence supports the hypothesis")
+    rationale: str = Field(description="Scientific reasoning behind the conclusion")
+
+
+class EvidenceItem(BaseModel):
+    """One piece of evidence supporting the conclusion."""
+
+    source: Literal["artifact", "literature", "reasoning"] = Field(
+        description="Where this evidence came from"
+    )
+    description: str = Field(description="What this evidence shows")
+
+
+class SuggestedPlan(BaseModel):
+    """A self-contained, executable plan embedded in a RecommendedAction.
+
+    Downstream agents (CodingAgent, ReproAgent, Runner) need ALL of this
+    to execute the action — no additional files or lookups required.
+    """
+
+    kind: Literal["coding_task", "repro_task", "run_task", "literature_search", "ask_user", "literature_reference"] = Field(
+        description="What kind of task this is. 'literature_reference' means directly cite the paper's reported numbers."
+    )
+    code_availability: Literal["public", "upon_request", "none", ""] = Field(
+        default="",
+        description="Whether code is available: public (has repo), upon_request (email author), none (no code). Only relevant for repro tasks."
+    )
+    # For coding tasks
+    repo_path: str = ""
+    task_goal: str = ""
+    constraints: list[str] = Field(default_factory=list)
+    verify_commands: list[str] = Field(default_factory=list)
+    expected_artifacts: list[str] = Field(default_factory=list)
+    # For repro tasks
+    paper_url: str = ""
+    repo_url: str = ""
+    experiment_goal: str = ""
+    compute_budget: ComputeBudget | None = None
+    expected_metrics: list[str] = Field(default_factory=list)
+    # For run tasks
+    command_goal: str = ""
+    expected_runtime: str = ""
+    requires_gpu: bool = False
+    # For literature search
+    search_query: str = ""
+    # For ask_user
+    question: str = ""
+
+
+class RecommendedAction(BaseModel):
+    """A scientific recommendation with a complete executable plan.
+
+    ResAgent reads these, decides which to execute, and dispatches
+    to the appropriate downstream agent with the embedded plan.
+    """
+
+    priority: Literal["high", "medium", "low"] = Field(
+        description="How urgent/important this action is"
+    )
+    type: Literal["repro_task", "coding_task", "run_task", "literature_search", "ask_user"] = Field(
+        description="What kind of action to take"
+    )
+    rationale: str = Field(
+        description="Scientific justification — WHY this action is recommended"
+    )
+    plan: SuggestedPlan = Field(
+        description="Complete executable plan. Downstream agents use this directly."
+    )
+
+
+class ResultAnalysis(BaseModel):
+    """Analysis of experiment results (embedded in ScientificDecision when relevant)."""
+
+    summary: str = Field(default="", description="One-paragraph analysis summary")
+    findings: list[str] = Field(default_factory=list, description="Key findings from the results")
+
+
+class FailureDiagnosis(BaseModel):
+    """Diagnosis of an experiment failure (embedded in ScientificDecision when relevant)."""
+
+    failure_type: Literal["transient", "system", "scientific", "code", "data", "budget"] = Field(
+        default="scientific",
+        description="Classified failure category",
+    )
+    diagnosis: str = Field(default="", description="What went wrong, scientifically speaking")
+    is_recoverable: bool = Field(default=True, description="Whether the experiment can be salvaged")
+
+
+class ScientificDecision(BaseModel):
+    """Unified output of ExpAgent — the scientific advisor's verdict.
+
+    This is THE output that ResAgent consumes. It combines:
+    - A scientific conclusion with confidence
+    - Supporting evidence
+    - Optional embedded experiment plan (for design/revision modes)
+    - Optional result analysis (for analyze mode)
+    - Optional failure diagnosis (for failure mode)
+    - Prioritized recommended actions (each with complete executable plan)
+    """
+
+    summary: str = Field(description="One-sentence summary of the scientific decision")
+    confidence: Literal["high", "medium", "low"] = Field(
+        description="How confident ExpAgent is in this conclusion"
+    )
+
+    conclusion: ScientificConclusion = Field(
+        description="The scientific verdict"
+    )
+    evidence: list[EvidenceItem] = Field(
+        default_factory=list,
+        description="Evidence supporting the conclusion",
+    )
+
+    experiment_plan: ExperimentPlan | None = Field(
+        default=None,
+        description="Embedded experiment plan (present when designing or revising experiments)",
+    )
+    result_analysis: ResultAnalysis | None = Field(
+        default=None,
+        description="Analysis of experiment results (present when analyzing results)",
+    )
+    failure_diagnosis: FailureDiagnosis | None = Field(
+        default=None,
+        description="Failure diagnosis (present when diagnosing failures)",
+    )
+
+    recommended_actions: list[RecommendedAction] = Field(
+        default_factory=list,
+        description="Prioritized list of actions ResAgent should consider. "
+                    "Each action contains a complete self-contained plan.",
+    )
+
+    risks: list[str] = Field(
+        default_factory=list,
+        description="Scientific risks ExpAgent identified",
+    )
+    needs_user_input: list[str] = Field(
+        default_factory=list,
+        description="Questions that need human answers before proceeding",
+    )
+
+
+# ── Context policy (self-adaptive to model window) ────────────────
+
+
+# Known model context windows (tokens)
+MODEL_CONTEXT_WINDOWS: dict[str, int] = {
+    "deepseek-v4-pro": 1_000_000,
+    "deepseek-v4-flash": 1_000_000,
+    "deepseek-chat": 128_000,
+    "deepseek-reasoner": 64_000,
+    "gpt-4.1": 1_000_000,
+    "gpt-4.1-mini": 1_000_000,
+    "gpt-4o": 128_000,
+    "gpt-4o-mini": 128_000,
+    "claude-3.5-sonnet": 200_000,
+    "claude-3-opus": 200_000,
+}
+
+
+class ContextPolicy(BaseModel):
+    """Limits for packing prompt context, scaled to model window size."""
+
+    step_history: int = 8          # how many previous steps to show
+    file_cache_count: int = 6      # how many file cache entries to include
+    file_cache_chars: int = 4000   # max chars per file cache entry
+    observation_tail: int = 500    # tail chars of last result
+    last_result_chars: int = 6000  # max chars for last result
+    search_results_chars: int = 3000  # max chars for search results in turn prompt
+
+    @classmethod
+    def for_model(cls, model: str | None) -> "ContextPolicy":
+        """Resolve context policy for a model by its window size."""
+        window = MODEL_CONTEXT_WINDOWS.get(
+            (model or "").lower().split("/")[-1], 128_000
+        )
+        if window >= 500_000:
+            return cls(
+                step_history=20,
+                file_cache_count=12,
+                file_cache_chars=8000,
+                observation_tail=2000,
+                last_result_chars=12000,
+                search_results_chars=8000,
+            )
+        if window >= 128_000:
+            return cls(
+                step_history=10,
+                file_cache_count=6,
+                file_cache_chars=4000,
+                observation_tail=500,
+                last_result_chars=6000,
+                search_results_chars=3000,
+            )
+        # Small window
+        return cls(
+            step_history=4,
+            file_cache_count=3,
+            file_cache_chars=2000,
+            observation_tail=300,
+            last_result_chars=3000,
+            search_results_chars=1500,
+        )

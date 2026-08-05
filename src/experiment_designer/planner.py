@@ -1,24 +1,21 @@
-"""Core planning engine — LLM-driven experiment plan generation and revision."""
+"""Backward-compatible wrappers around the advisor agentic loop.
+
+plan() and revise() now delegate to advise() internally.
+Existing callers (tests, REPL) don't need to change.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
-import yaml
-
-from .llm import call_llm
-from .models import DesignInput, ExperimentPlan, ValidationResult
-from .prompts import (
-    REVISE_SYSTEM_PROMPT,
-    SYSTEM_PROMPT,
-    build_plan_prompt,
-    build_revise_prompt,
+from .advisor import advise
+from .models import (
+    AdvisorContext,
+    DesignInput,
+    ExperimentPlan,
+    ScientificDecision,
 )
-from .validator import validate
-
-# Maximum retries for LLM calls (parse failure or validation failure).
-MAX_RETRIES = 2
+from .prompts import build_plan_prompt, build_revise_prompt
 
 
 def plan(
@@ -32,22 +29,112 @@ def plan(
 ) -> tuple[ExperimentPlan, list[str]]:
     """Generate a new experiment plan from a research idea.
 
-    Args:
-        inp: The design input containing research idea, constraints, etc.
-        model: LLM model name.
-        api_base: API base URL.
-        api_key_env: Env var holding the API key.
-        mock: If True, use deterministic mock instead of real LLM.
-        trace_dir: Optional directory for LLM trace files.
-
-    Returns:
-        Tuple of (experiment plan, list of diagnostic messages from retries).
+    Delegates to advise() internally.
     """
-    system = SYSTEM_PROMPT
-    user = build_plan_prompt(inp)
-    return _generate(system, user, model=model, api_base=api_base,
-                     api_key_env=api_key_env, mock=mock, trace_dir=trace_dir,
-                     trace_label="plan")
+    situation = build_plan_prompt(inp)
+    ctx = AdvisorContext(situation=situation)
+
+    decision, trace = advise(
+        ctx,
+        model=model,
+        api_base=api_base,
+        api_key_env=api_key_env,
+        mock=mock,
+        trace_dir=trace_dir,
+    )
+
+    if decision.experiment_plan:
+        return _populate_tasks_from_actions(decision.experiment_plan, decision.recommended_actions), [f"confidence: {decision.confidence}"]
+
+    # Fallback: build a minimal plan from the decision
+    from .models import (
+        AnalysisPlan,
+        CodingTask,
+        ExperimentMatrix,
+        ReproTask,
+        ResearchGoal,
+        Risk,
+        RunTask,
+        TaskBundle,
+    )
+    tasks = TaskBundle(
+        coding_tasks=_extract_coding_tasks(decision.recommended_actions),
+        repro_tasks=_extract_repro_tasks(decision.recommended_actions),
+        run_tasks=_extract_run_tasks(decision.recommended_actions),
+    )
+    fallback = ExperimentPlan(
+        goal=ResearchGoal(
+            summary=decision.summary,
+            hypothesis=decision.conclusion.rationale[:200] if decision.conclusion.rationale else "See scientific_decision.yaml",
+        ),
+        experiment_matrix=ExperimentMatrix(),
+        tasks=tasks,
+        analysis_plan=AnalysisPlan(),
+        risks=[Risk(description=r) for r in decision.risks],
+    )
+    return fallback, [f"Fallback plan from decision (confidence: {decision.confidence})"]
+
+
+def _populate_tasks_from_actions(plan: ExperimentPlan, actions: list) -> ExperimentPlan:
+    """Ensure experiment_plan.tasks is populated from recommended_actions if empty."""
+    from .models import RecommendedAction
+    if not plan.tasks.coding_tasks and not plan.tasks.repro_tasks and not plan.tasks.run_tasks:
+        plan.tasks.coding_tasks = _extract_coding_tasks(actions)
+        plan.tasks.repro_tasks = _extract_repro_tasks(actions)
+        plan.tasks.run_tasks = _extract_run_tasks(actions)
+    return plan
+
+
+def _extract_coding_tasks(actions: list) -> list:
+    from .models import CodingTask
+    tasks = []
+    for i, a in enumerate(actions):
+        if a.type == "coding_task":
+            p = a.plan
+            tasks.append(CodingTask(
+                id=f"code_{i+1:03d}",
+                repo_path=p.repo_path or "",
+                task_goal=p.task_goal or p.experiment_goal or a.rationale[:100],
+                constraints=p.constraints,
+                verify_commands=p.verify_commands,
+                expected_artifacts=p.expected_artifacts,
+                rationale=a.rationale,
+            ))
+    return tasks
+
+
+def _extract_repro_tasks(actions: list) -> list:
+    from .models import ReproTask, ComputeBudget
+    tasks = []
+    for i, a in enumerate(actions):
+        if a.type == "repro_task":
+            p = a.plan
+            tasks.append(ReproTask(
+                id=f"repro_{i+1:03d}",
+                paper_url=p.paper_url,
+                repo_url=p.repo_url,
+                experiment_goal=p.experiment_goal or a.rationale,
+                compute_budget=p.compute_budget,
+                expected_metrics=p.expected_metrics,
+                rationale=a.rationale,
+            ))
+    return tasks
+
+
+def _extract_run_tasks(actions: list) -> list:
+    from .models import RunTask
+    tasks = []
+    for i, a in enumerate(actions):
+        if a.type == "run_task":
+            p = a.plan
+            tasks.append(RunTask(
+                id=f"run_{i+1:03d}",
+                command_goal=p.command_goal or p.experiment_goal or a.rationale[:100],
+                expected_runtime=p.expected_runtime,
+                requires_gpu=p.requires_gpu,
+                rationale=a.rationale,
+            ))
+    return tasks
 
 
 def revise(
@@ -62,130 +149,38 @@ def revise(
 ) -> tuple[ExperimentPlan, list[str]]:
     """Revise an existing experiment plan based on user feedback.
 
-    Args:
-        current_plan: The current experiment plan to modify.
-        feedback: User's natural language feedback on what to change.
-        model: LLM model name.
-        api_base: API base URL.
-        api_key_env: Env var holding the API key.
-        mock: If True, use deterministic mock instead of real LLM.
-        trace_dir: Optional directory for LLM trace files.
-
-    Returns:
-        Tuple of (revised experiment plan, list of diagnostic messages).
+    Delegates to advise() internally.
     """
-    system = REVISE_SYSTEM_PROMPT
-    user = build_revise_prompt(current_plan, feedback)
-    return _generate(system, user, model=model, api_base=api_base,
-                     api_key_env=api_key_env, mock=mock, trace_dir=trace_dir,
-                     trace_label="revise")
+    situation = build_revise_prompt(current_plan, feedback)
+    ctx = AdvisorContext(situation=situation, existing_plan=current_plan)
 
+    decision, trace = advise(
+        ctx,
+        model=model,
+        api_base=api_base,
+        api_key_env=api_key_env,
+        mock=mock,
+        trace_dir=trace_dir,
+    )
 
-# ── Internal ─────────────────────────────────────────────────────
+    if decision.experiment_plan:
+        return _populate_tasks_from_actions(decision.experiment_plan, decision.recommended_actions), [f"confidence: {decision.confidence}"]
 
-
-def _generate(
-    system: str,
-    user: str,
-    *,
-    model: str,
-    api_base: str,
-    api_key_env: str,
-    mock: bool,
-    trace_dir: Path | None,
-    trace_label: str,
-) -> tuple[ExperimentPlan, list[str]]:
-    """Shared generation loop with retry logic."""
-    diags: list[str] = []
-
-    for attempt in range(1, MAX_RETRIES + 2):
-        raw = call_llm(
-            model=model,
-            api_base=api_base,
-            api_key_env=api_key_env,
-            system=system,
-            user=user,
-            mock=mock,
-            trace_dir=trace_dir,
-            trace_label=f"{trace_label}_attempt{attempt}",
-        )
-
-        # Extract YAML from the LLM response
-        yaml_text = _extract_yaml(raw)
-
-        # Try to parse
-        try:
-            data = yaml.safe_load(yaml_text)
-        except yaml.YAMLError as e:
-            msg = f"Attempt {attempt}: YAML parse error — {e}"
-            diags.append(msg)
-            if attempt <= MAX_RETRIES:
-                user = _retry_prompt(user, f"YAML parse error: {e}\nPlease output valid YAML only.")
-                continue
-            raise RuntimeError(f"Failed to parse LLM output after {attempt} attempts.\n{msg}\n\nRaw output:\n{raw}")
-
-        if not isinstance(data, dict):
-            msg = f"Attempt {attempt}: LLM output is not a YAML dictionary (got {type(data).__name__})"
-            diags.append(msg)
-            if attempt <= MAX_RETRIES:
-                user = _retry_prompt(user, "Output was not a valid YAML document. Please output a complete YAML document.")
-                continue
-            raise RuntimeError(f"Failed to get valid YAML from LLM after {attempt} attempts.\n{msg}")
-
-        # Try Pydantic parsing
-        try:
-            plan_obj = ExperimentPlan.model_validate(data)
-        except Exception as e:
-            msg = f"Attempt {attempt}: Pydantic validation error — {e}"
-            diags.append(msg)
-            if attempt <= MAX_RETRIES:
-                user = _retry_prompt(user, f"Schema validation error: {e}\nPlease fix the YAML to match the required schema.")
-                continue
-            raise RuntimeError(f"Failed to validate plan schema after {attempt} attempts.\n{msg}")
-
-        # Deterministic safety-net validation
-        vr: ValidationResult = validate(plan_obj)
-        if vr.status == "needs_revision" and attempt <= MAX_RETRIES:
-            issue_list = "\n".join(f"- {i}" for i in vr.issues)
-            msg = f"Attempt {attempt}: validation issues — {vr.issues}"
-            diags.append(msg)
-            user = _retry_prompt(user, f"Plan validation found these issues:\n{issue_list}\nPlease fix them and output the complete corrected YAML.")
-            continue
-
-        # If validation still fails on last attempt, return the plan anyway
-        # with the issues recorded — caller can decide what to do.
-        if vr.status == "needs_revision":
-            diags.append(f"Final: validation issues remain — {vr.issues}")
-
-        return plan_obj, diags
-
-    # Should be unreachable
-    raise RuntimeError("Unexpected: retry loop exhausted")
+    # Fallback: return the original plan with no changes
+    return current_plan, ["Revision did not produce a new experiment plan"]
 
 
 def _extract_yaml(text: str) -> str:
-    """Extract YAML content from an LLM response.
-
-    Handles:
-    - ```yaml ... ``` blocks
-    - ``` ... ``` blocks
-    - ```yaml ... (no closing fence — LLM truncated)
-    - Raw YAML (no code fence)
-    """
-    # Try fenced yaml block first
+    """Extract YAML content from an LLM response (backward-compat re-export)."""
     if "```yaml" in text:
         start = text.index("```yaml") + len("```yaml")
         try:
             end = text.index("```", start)
             return text[start:end].strip()
         except ValueError:
-            # No closing fence — take everything after the opening fence
             return text[start:].strip()
-
-    # Try generic fenced block
     if "```" in text:
         start = text.index("```") + 3
-        # Skip optional language tag on the opening fence
         remaining = text[start:]
         nl = remaining.find("\n")
         if nl != -1:
@@ -195,11 +190,4 @@ def _extract_yaml(text: str) -> str:
             return text[start:end].strip()
         except ValueError:
             return text[start:].strip()
-
-    # Assume raw YAML
     return text.strip()
-
-
-def _retry_prompt(original_user: str, error_detail: str) -> str:
-    """Append error feedback to the user prompt for retry."""
-    return f"{original_user}\n\n[SYSTEM NOTE: Previous attempt failed.\n{error_detail}]"

@@ -1,23 +1,34 @@
-"""CLI entry point — REPL and direct modes."""
+"""CLI entry point — REPL, direct, and advise modes."""
 
 from __future__ import annotations
 
 import argparse
-import os
 import readline
 import sys
 from pathlib import Path
 
-from .config import resolve_codingagent_path, resolve_llm_config, resolve_reproagent_path
-from .models import ComputeBudget, DesignInput, ExistingAssets, ExperimentPlan
+from .advisor import advise
+from .config import resolve_llm_config
+from .models import (
+    AdvisorContext,
+    ArtifactRef,
+    ComputeBudget,
+    DesignInput,
+    ExistingAssets,
+    ExperimentPlan,
+)
 from .planner import plan, revise
-from .report import write_plan, write_validation_report
-from .validator import validate
+from .report import write_decision, write_plan, write_validation_report
+from .validator import validate, validate_decision
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Entry point for experiment-designer CLI."""
+    """Entry point for ExpAgent CLI."""
     args = _parse_args(argv)
+
+    if args.command == "advise":
+        _run_advise(args)
+        return
 
     # Resolve LLM config
     llm = resolve_llm_config(
@@ -25,16 +36,6 @@ def main(argv: list[str] | None = None) -> None:
         cli_model=args.model,
         cli_api_base=args.api_base,
         cli_api_key_env=args.api_key_env,
-    )
-
-    # Resolve agent paths
-    codingagent_path = resolve_codingagent_path(
-        cli_path=args.codingagent_path,
-        config_path=args.config,
-    )
-    reproagent_path = resolve_reproagent_path(
-        cli_path=args.reproagent_path,
-        config_path=args.config,
     )
 
     # Build initial DesignInput if --idea provided
@@ -54,7 +55,6 @@ def main(argv: list[str] | None = None) -> None:
 
     # Determine mode
     if args.no_interactive and initial_input:
-        # Direct mode: generate plan and exit
         _run_direct(
             inp=initial_input,
             output_dir=args.output or _default_output_dir(),
@@ -62,12 +62,9 @@ def main(argv: list[str] | None = None) -> None:
             mock=args.mock_llm,
         )
     else:
-        # REPL mode
         _run_repl(
             initial_input=initial_input,
             llm=llm,
-            codingagent_path=codingagent_path,
-            reproagent_path=reproagent_path,
             mock=args.mock_llm,
             config_path=args.config,
         )
@@ -80,8 +77,6 @@ def _run_repl(
     *,
     initial_input: DesignInput | None,
     llm: dict[str, str],
-    codingagent_path: Path | None,
-    reproagent_path: Path | None,
     mock: bool,
     config_path: str | None,
 ) -> None:
@@ -125,8 +120,7 @@ def _run_repl(
 
         # Slash commands
         if user_input.startswith("/"):
-            _handle_command(user_input, state, llm, mock, codingagent_path,
-                            reproagent_path, config_path)
+            _handle_command(user_input, state, llm, mock, config_path)
             continue
 
         # Natural language input
@@ -138,8 +132,6 @@ def _handle_command(
     state: dict,
     llm: dict[str, str],
     mock: bool,
-    codingagent_path: Path | None,
-    reproagent_path: Path | None,
     config_path: str | None,
 ) -> None:
     """Process a /slash command."""
@@ -223,7 +215,7 @@ def _handle_command(
         _print_info("Cleared current plan. Describe your new research idea.")
 
     elif name == "/config":
-        _print_config(llm, codingagent_path, reproagent_path, mock)
+        _print_config(llm, mock)
 
     else:
         _print_warn(f"Unknown command: {name}. Type /help for available commands.")
@@ -419,8 +411,6 @@ def _print_plan_full(plan: ExperimentPlan, section: str = "") -> None:
 
 def _print_config(
     llm: dict[str, str],
-    codingagent_path: Path | None,
-    reproagent_path: Path | None,
     mock: bool,
 ) -> None:
     """Print current configuration."""
@@ -429,8 +419,6 @@ def _print_config(
     _print_kv("API Base", llm["api_base"])
     _print_kv("API Key Env", llm["api_key_env"])
     _print_kv("Mock Mode", "ON" if mock else "OFF")
-    _print_kv("CodingAgent", str(codingagent_path) if codingagent_path else "(not configured)")
-    _print_kv("ReproAgent", str(reproagent_path) if reproagent_path else "(not configured)")
     print()
 
 
@@ -462,12 +450,79 @@ def _print_dim(msg: str) -> None:
 # ── CLI argument parsing ──────────────────────────────────────────
 
 
+def _run_advise(args: argparse.Namespace) -> None:
+    """Handle the 'expagent advise' subcommand."""
+    import yaml as _yaml
+
+    llm = resolve_llm_config(
+        config_path=args.config,
+        cli_model=args.model,
+        cli_api_base=args.api_base,
+        cli_api_key_env=args.api_key_env,
+    )
+
+    situation = _read_idea(args.context) if args.context else ""
+    artifacts: list[ArtifactRef] = []
+    if args.artifacts:
+        for art_path in args.artifacts:
+            p = Path(art_path).expanduser()
+            if p.exists():
+                summary = p.read_text(encoding="utf-8")[:500] if p.is_file() else str(p)
+                artifacts.append(ArtifactRef(id=p.stem, type="other", path=str(p.resolve()), summary=summary))
+
+    existing_plan = None
+    if getattr(args, "existing_plan", None):
+        plan_path = Path(args.existing_plan).expanduser()
+        if plan_path.exists():
+            data = _yaml.safe_load(plan_path.read_text(encoding="utf-8"))
+            existing_plan = ExperimentPlan.model_validate(data)
+
+    ctx = AdvisorContext(situation=situation, artifacts=artifacts, existing_plan=existing_plan)
+    output_dir = args.output or _default_output_dir()
+    mock = getattr(args, "mock_llm", False)
+
+    print("ExpAgent analyzing...")
+    decision, trace = advise(ctx, model=llm["model"], api_base=llm["api_base"],
+                             api_key_env=llm["api_key_env"], mock=mock)
+
+    plan_path = write_decision(decision, output_dir)
+    vr = validate_decision(decision)
+    write_validation_report(vr, output_dir)
+    if decision.experiment_plan:
+        write_plan(decision.experiment_plan, output_dir)
+
+    print(f"Saved: {plan_path}")
+    print(f"Confidence: {decision.confidence}")
+    print(f"Conclusion: {decision.conclusion.status}")
+    print(f"Actions: {len(decision.recommended_actions)}")
+    if vr.status == "needs_revision":
+        print(f"Validation issues ({len(vr.issues)}):")
+        for issue in vr.issues:
+            print(f"  - {issue}")
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
         prog="expagent",
-        description="ExpAgent — LLM-first experiment design agent for ML research",
+        description="ExpAgent — LLM-first scientific advisor for ML research",
     )
+
+    sub = parser.add_subparsers(dest="command")
+
+    # ---- advise subcommand ----
+    advise_parser = sub.add_parser("advise", help="Run ExpAgent as scientific advisor")
+    advise_parser.add_argument("--context", type=str, default=None, help="Situation description (file path or inline string)")
+    advise_parser.add_argument("--artifacts", type=str, nargs="*", default=None, help="Artifact file paths")
+    advise_parser.add_argument("--existing-plan", type=str, default=None, help="Path to experiment_plan.yaml")
+    advise_parser.add_argument("--output", "-o", type=Path, default=None, help="Output directory")
+    advise_parser.add_argument("--model", type=str, default=None)
+    advise_parser.add_argument("--api-base", type=str, default=None)
+    advise_parser.add_argument("--api-key-env", type=str, default=None)
+    advise_parser.add_argument("--mock-llm", action="store_true", default=False)
+    advise_parser.add_argument("--config", "-c", type=str, default=None)
+
+    # ---- Default / REPL mode (no subcommand) ----
 
     # Idea input
     parser.add_argument(
@@ -496,10 +551,6 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--api-base", type=str, default=None)
     parser.add_argument("--api-key-env", type=str, default=None)
     parser.add_argument("--mock-llm", action="store_true", default=False)
-
-    # Agent path overrides
-    parser.add_argument("--codingagent-path", type=Path, default=None)
-    parser.add_argument("--reproagent-path", type=Path, default=None)
 
     # Config
     parser.add_argument("--config", "-c", type=str, default=None,

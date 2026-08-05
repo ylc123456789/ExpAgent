@@ -15,50 +15,102 @@ from pathlib import Path
 from typing import Any
 
 
+# ── Tool definitions (OpenAI-compatible function calling) ─────────
+
+
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_papers",
+            "description": "Search for scientific papers. Be specific and purposeful — not blind keyword searches.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Specific search query. E.g. 'channel attention image classification CIFAR-10 benchmark' not 'attention'"},
+                    "source": {"type": "string", "enum": ["semantic_scholar", "dblp", "arxiv"], "default": "semantic_scholar", "description": "Which API to search"},
+                    "venue_filter": {"type": "string", "description": "Filter by venue, e.g. 'CVPR', 'ICLR', 'NeurIPS'. Leave empty for no filter."},
+                    "year_from": {"type": "integer", "description": "Only papers published after this year"},
+                    "max_results": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "Read a local artifact file (experiment result, log, report) to see detailed data.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to the file to read"},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "finish",
+            "description": "Output your scientific decision as a YAML document when you have enough information.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "decision_yaml": {"type": "string", "description": "Complete YAML document with the ScientificDecision structure"},
+                },
+                "required": ["decision_yaml"],
+            },
+        },
+    },
+]
+
+
 def call_llm(
     *,
     model: str,
     api_base: str,
     api_key_env: str,
     system: str,
-    user: str,
+    messages: list[dict],
     mock: bool = False,
     trace_dir: Path | None = None,
     trace_label: str = "llm",
-) -> str:
-    """Call an OpenAI-compatible chat completions API. No chat history.
+) -> dict:
+    """Call LLM with tool definitions, returning parsed tool_call or message.
 
     Args:
-        model: Model name (e.g. 'deepseek-chat').
-        api_base: Base URL for the API.
-        api_key_env: Environment variable name holding the API key.
-        system: System prompt.
-        user: User prompt.
-        mock: If True, return deterministic mock output.
-        trace_dir: If set, write prompt/response traces there for debugging.
-        trace_label: Label prefix for trace files.
+        messages: List of message dicts [{"role": "system", "content": ...}, ...].
+                  The system message should be included as the first message.
+        Others: Same as call_llm.
 
     Returns:
-        The LLM's raw text response.
+        dict with keys:
+        - "type": "tool_call" | "message" | "error"
+        - "name": tool name (if tool_call)
+        - "arguments": dict of parsed arguments (if tool_call)
+        - "content": str (if message)
+        - "error": str (if error)
     """
     if mock:
-        text = _mock_plan(user)
+        result = _mock_tool_response(messages)
         if trace_dir:
-            _write_trace(trace_dir, trace_label, system, user, text)
-        return text
+            _write_trace(trace_dir, trace_label, "",
+                         json.dumps(messages[-1], ensure_ascii=False) if messages else "",
+                         json.dumps(result, ensure_ascii=False))
+        return result
 
     api_key = os.environ.get(api_key_env)
     if not api_key:
-        raise RuntimeError(
-            f"{api_key_env} is not set. Set it or use mock=True for testing."
-        )
+        raise RuntimeError(f"{api_key_env} is not set.")
 
     body: dict[str, Any] = {
         "model": model,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
+        "messages": messages,
+        "tools": TOOLS,
+        "tool_choice": "auto",
         "temperature": 0.3,
     }
 
@@ -76,12 +128,33 @@ def call_llm(
     with urllib.request.urlopen(req, timeout=180) as resp:
         data = json.loads(resp.read().decode("utf-8"))
 
-    text = data["choices"][0]["message"]["content"].strip()
+    choice = data["choices"][0]
+    msg = choice.get("message", {})
 
     if trace_dir:
-        _write_trace(trace_dir, trace_label, system, user, text)
+        _write_trace(trace_dir, trace_label, "", json.dumps(messages, ensure_ascii=False),
+                     json.dumps(msg, ensure_ascii=False))
 
-    return text
+    # Check for tool calls
+    tool_calls = msg.get("tool_calls", [])
+    if tool_calls:
+        tc = tool_calls[0]
+        func = tc.get("function", {})
+        try:
+            arguments = json.loads(func.get("arguments", "{}"))
+        except json.JSONDecodeError:
+            arguments = {}
+        return {
+            "type": "tool_call",
+            "name": func.get("name", "unknown"),
+            "arguments": arguments,
+        }
+
+    # Plain text message (no tool call)
+    return {
+        "type": "message",
+        "content": msg.get("content", ""),
+    }
 
 
 def _chat_completions_url(api_base: str) -> str:
@@ -113,104 +186,65 @@ def _write_trace(
 # ── Mock responses ─────────────────────────────────────────────────
 
 
-def _mock_plan(user: str) -> str:
-    """Return a deterministic mock experiment plan for pipeline testing."""
-    return """```yaml
-version: 1
-goal:
-  summary: "验证通道注意力机制在 CIFAR-10 图像分类上的参数效率"
-  hypothesis: "新的通道注意力变体在参数量增加 < 5% 的条件下，比标准 ResNet-18 的 top-1 accuracy 提升 >= 2%"
-  success_criteria:
-    - "参数量增加 < 5%"
-    - "top-1 accuracy 提升 >= 2% vs ResNet-18 baseline"
-    - "训练时间增加 < 10%"
+_MOCK_TOOL_STEP = 0
 
-experiment_matrix:
-  datasets:
-    - name: "CIFAR-10"
-      split: "standard"
-      rationale: "轻量验证，快速迭代，大多数图像分类论文都报告此数据集结果"
-  methods:
-    - name: "proposed_channel_attention"
-      type: "new_method"
-      implementation_status: "needs_code"
-      rationale: "本次实验要验证的核心方法"
-    - name: "resnet18_baseline"
-      type: "baseline"
-      implementation_status: "needs_repro"
-      rationale: "最通用的图像分类基线，几乎每篇论文都报告"
-    - name: "resnet18_se"
-      type: "baseline"
-      implementation_status: "needs_repro"
-      rationale: "SENet 是最经典的通道注意力方法，作为直接对比基线"
-    - name: "resnet18_no_attention"
-      type: "ablation"
-      implementation_status: "existing"
-      rationale: "消融实验：验证注意力模块本身是否带来增益"
-  metrics:
-    - name: "top1_accuracy"
-      rationale: "主要评估指标"
-    - name: "params_count"
-      rationale: "验证参数效率假设"
-    - name: "train_time_per_epoch"
-      rationale: "验证计算开销假设"
-    - name: "flops"
-      rationale: "补充计算复杂度指标"
 
-tasks:
-  coding_tasks:
-    - id: "code_001"
-      repo_path: "/home/cyl/my_project"
-      task_goal: "在 models/ 中实现 proposed_channel_attention 模块"
-      constraints:
-        - "不改变 baseline 训练入口"
-        - "保持与现有模型注册机制兼容"
-      verify_commands:
-        - "python -m pytest tests/test_attention.py"
-      expected_artifacts:
-        - "patch.diff"
-        - "verification_report.md"
-      rationale: "核心方法需要从头实现"
+def _mock_tool_response(messages: list[dict]) -> dict:
+    """Deterministic mock for function calling. First search, then finish."""
+    global _MOCK_TOOL_STEP
+    _MOCK_TOOL_STEP += 1
+    last_msg = messages[-1].get("content", "") if messages else ""
 
-  repro_tasks:
-    - id: "repro_001"
-      paper_url: "https://arxiv.org/abs/1709.01507"
-      repo_url: "https://github.com/moskomule/senet.pytorch"
-      experiment_goal: "在 CIFAR-10 上复现 SE-ResNet-18 的 bounded 结果（10 epochs）"
-      compute_budget:
-        gpu: "RTX 4090"
-        max_runtime: "30 minutes"
-        max_trials: 3
-      expected_metrics:
-        - "top1_accuracy"
-        - "params_count"
-      rationale: "SENet 是通道注意力的代表方法，需要其 CIFAR-10 结果作为对比基线"
+    if _MOCK_TOOL_STEP <= 1 and "finish" not in last_msg.lower():
+        return {
+            "type": "tool_call",
+            "name": "search_papers",
+            "arguments": {"query": "channel attention image classification benchmark", "max_results": 3},
+        }
+    # Finish with YAML
+    import yaml as _yaml
+    decision = _make_mock_design_decision()
+    yaml_str = _yaml.dump(decision, allow_unicode=True, sort_keys=False)
+    return {
+        "type": "tool_call",
+        "name": "finish",
+        "arguments": {"decision_yaml": yaml_str},
+    }
 
-  run_tasks:
-    - id: "run_001"
-      command_goal: "运行 proposed_method 的 CIFAR-10 bounded 训练（10 epochs）"
-      expected_runtime: "20 minutes"
-      requires_gpu: true
-      rationale: "核心对比实验"
 
-analysis_plan:
-  comparisons:
-    - "proposed_channel_attention vs resnet18_baseline（主要对比）"
-    - "proposed_channel_attention vs resnet18_se（通道注意力内部对比）"
-    - "proposed_channel_attention vs resnet18_no_attention（消融）"
-  plots:
-    - "accuracy vs params_count 散点图（标注各方法）"
-    - "训练曲线对比图"
-  failure_checks:
-    - "检查参数量增加是否主要来自 attention 模块还是其他部分"
-    - "检查是否只是因为训练更久导致提升（控制 epoch 数一致）"
-    - "验证实验结果在 3 次随机种子下稳定"
+def _make_mock_design_decision() -> dict:
+    """Mock decision dict for testing."""
+    return {
+        "summary": "Verify channel attention parameter efficiency on CIFAR-10",
+        "confidence": "medium",
+        "conclusion": {"status": "needs_more_experiments", "rationale": "L2-norm attention is scientifically plausible."},
+        "evidence": [
+            {"source": "literature", "description": "SE-Net established channel attention for CNNs"},
+        ],
+        "experiment_plan": {
+            "version": 1,
+            "goal": {"summary": "Validate L2-norm attention", "hypothesis": "L2-norm attn >= 2% improvement", "success_criteria": ["top-1 accuracy >= baseline + 2%"]},
+            "experiment_matrix": {
+                "datasets": [{"name": "CIFAR-10", "split": "standard", "rationale": "Standard benchmark"}],
+                "methods": [
+                    {"name": "proposed_l2_attention", "type": "new_method", "implementation_status": "needs_code", "rationale": "Core method"},
+                    {"name": "resnet18_baseline", "type": "baseline", "implementation_status": "needs_repro", "rationale": "Standard baseline"},
+                ],
+                "metrics": [{"name": "top1_accuracy", "rationale": "Primary metric"}],
+            },
+            "tasks": {
+                "coding_tasks": [{"id": "code_001", "repo_path": "/home/cyl/my_project", "task_goal": "Implement L2-norm attention", "rationale": "Core method"}],
+                "repro_tasks": [],
+                "run_tasks": [{"id": "run_001", "command_goal": "Run CIFAR-10 bounded experiment", "rationale": "Core comparison"}],
+            },
+            "analysis_plan": {"comparisons": ["proposed vs resnet18"], "plots": [], "failure_checks": []},
+            "risks": [{"description": "May not generalize", "mitigation": "Follow-up on ImageNet"}],
+        },
+        "recommended_actions": [
+            {"priority": "high", "type": "coding_task", "rationale": "Implement proposed method", "plan": {"kind": "coding_task", "repo_path": "/home/cyl/my_project", "task_goal": "Implement L2-norm attention"}},
+        ],
+        "risks": ["CIFAR-10 may not generalize"],
+        "needs_user_input": [],
+    }
 
-risks:
-  - description: "SE-Net 复现代码可能无法直接在 CIFAR-10 上运行"
-    mitigation: "准备 PyTorch 官方 torchvision 的 SE-ResNet 实现作为备选"
-  - description: "CIFAR-10 是小数据集，结论可能不推广到 ImageNet 规模"
-    mitigation: "后续阶段在 ImageNet 子集上验证"
-  - description: "如果参数量控制不住，可能是不公平对比"
-    mitigation: "设置参数量上限约束，若超限则调整通道数重新实验"
-```"""
+

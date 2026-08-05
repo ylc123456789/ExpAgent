@@ -10,6 +10,7 @@ requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.0",
     "pyyaml",
+    "defusedxml",
 ]
 
 [project.optional-dependencies]

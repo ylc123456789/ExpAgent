@@ -1,4 +1,4 @@
-"""Deterministic safety-net validation for experiment plans.
+"""Deterministic safety-net validation for experiment plans and scientific decisions.
 
 Checks that the LLM didn't skip essential fields. These are structural
 completeness checks — not semantic review (the LLM handles that).
@@ -6,7 +6,7 @@ completeness checks — not semantic review (the LLM handles that).
 
 from __future__ import annotations
 
-from .models import ExperimentPlan, ValidationResult
+from .models import ExperimentPlan, ScientificDecision, ValidationResult
 
 
 def validate(plan: ExperimentPlan) -> ValidationResult:
@@ -80,16 +80,14 @@ def validate(plan: ExperimentPlan) -> ValidationResult:
             issues.append(f"coding_tasks[{i}] ({t.id}): task_goal is empty")
         if not t.rationale.strip():
             issues.append(f"coding_tasks[{i}] ({t.id}): rationale is empty")
-        if not t.repo_path.strip():
-            issues.append(f"coding_tasks[{i}] ({t.id}): repo_path is empty")
+        if not t.repo_path.strip() and not t.task_goal.strip():
+            issues.append(f"coding_tasks[{i}] ({t.id}): both repo_path and task_goal are empty")
 
     for i, t in enumerate(repro):
         if not t.id.strip():
             issues.append(f"repro_tasks[{i}].id is empty")
         if not t.paper_url.strip():
             issues.append(f"repro_tasks[{i}] ({t.id}): paper_url is empty")
-        if not t.repo_url.strip():
-            issues.append(f"repro_tasks[{i}] ({t.id}): repo_url is empty")
         if not t.experiment_goal.strip():
             issues.append(f"repro_tasks[{i}] ({t.id}): experiment_goal is empty")
         if not t.rationale.strip():
@@ -114,6 +112,64 @@ def validate(plan: ExperimentPlan) -> ValidationResult:
     # ── Analysis plan checks ────────────────────────────────────
     if not plan.analysis_plan.comparisons and not plan.analysis_plan.plots:
         issues.append("analysis_plan has no comparisons or plots — should describe what to compare and visualize")
+
+    status = "needs_revision" if issues else "ok"
+    return ValidationResult(status=status, issues=issues)
+
+
+def validate_decision(decision: ScientificDecision) -> ValidationResult:
+    """Validate a ScientificDecision for structural completeness.
+
+    Checks differ from validate() because ScientificDecision is a different
+    kind of output — it's advice, not an experiment plan.
+    """
+
+    issues: list[str] = []
+
+    # Summary
+    if not decision.summary.strip():
+        issues.append("summary is empty")
+
+    # Conclusion
+    if not decision.conclusion.rationale.strip():
+        issues.append("conclusion.rationale is empty — must explain the scientific reasoning")
+    if not decision.conclusion.status:
+        issues.append("conclusion.status is empty")
+
+    # Evidence
+    if not decision.evidence:
+        issues.append("evidence is empty — must cite at least one piece of evidence supporting the conclusion")
+
+    # Recommended actions — can be empty but should explain why
+    if not decision.recommended_actions:
+        if "no action" not in decision.conclusion.rationale.lower():
+            issues.append("recommended_actions is empty — if no actions are needed, explain why in the conclusion")
+
+    # Each action must have a complete plan
+    for i, action in enumerate(decision.recommended_actions):
+        if not action.rationale.strip():
+            issues.append(f"recommended_actions[{i}]: rationale is empty")
+        plan = action.plan
+        if action.type == "repro_task":
+            if not plan.paper_url.strip():
+                issues.append(f"recommended_actions[{i}] (repro_task): plan.paper_url is empty")
+            if not plan.repo_url.strip():
+                issues.append(f"recommended_actions[{i}] (repro_task): plan.repo_url is empty")
+            if not plan.experiment_goal.strip():
+                issues.append(f"recommended_actions[{i}] (repro_task): plan.experiment_goal is empty")
+        elif action.type == "coding_task":
+            if not plan.task_goal.strip():
+                issues.append(f"recommended_actions[{i}] (coding_task): plan.task_goal is empty")
+        elif action.type == "run_task":
+            if not plan.command_goal.strip():
+                issues.append(f"recommended_actions[{i}] (run_task): plan.command_goal is empty")
+        elif action.type == "literature_search":
+            if not plan.search_query.strip():
+                issues.append(f"recommended_actions[{i}] (literature_search): plan.search_query is empty")
+
+    # Risks
+    if not decision.risks:
+        issues.append("risks is empty — must identify at least one scientific risk")
 
     status = "needs_revision" if issues else "ok"
     return ValidationResult(status=status, issues=issues)

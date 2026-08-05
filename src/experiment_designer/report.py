@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from .models import ExperimentPlan, ValidationResult
+from .models import ExperimentPlan, ScientificDecision, ValidationResult
 
 
 def write_plan(plan: ExperimentPlan, output_dir: Path) -> Path:
@@ -87,3 +87,21 @@ def _represent_yaml(data: dict) -> str:
         sort_keys=False,
         default_flow_style=False,
     )
+
+
+def write_decision(decision: ScientificDecision, output_dir: Path) -> Path:
+    """Write scientific_decision.yaml to output_dir. Creates directory if needed.
+
+    Returns the path to the written file.
+    """
+    from .models import ScientificDecision
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "scientific_decision.yaml"
+
+    data = decision.model_dump(exclude_defaults=False)
+    output_path.write_text(
+        _represent_yaml(data),
+        encoding="utf-8",
+    )
+    return output_path

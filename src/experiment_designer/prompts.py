@@ -1,207 +1,283 @@
-"""System prompts and user prompt builders.
+"""Unified system prompt and user-prompt builders for ExpAgent v2.
 
-Two modes:
-- plan: generate a new experiment plan from scratch
-- revise: modify an existing plan based on user feedback
+One prompt system (like ReproAgent's controller) that handles all scientific
+advisory situations: designing experiments, analyzing results, diagnosing
+failures, comparing methods, and revising plans.
 """
 
 from __future__ import annotations
 
-from .models import DesignInput, ExperimentPlan
-
-# ── System prompts ────────────────────────────────────────────────
+from .models import AdvisorContext, ArtifactRef
 
 SYSTEM_PROMPT = """\
-You are an expert machine learning experiment designer. Your task is to turn a research idea into a concrete, structured experiment plan.
+You are a machine learning research scientist serving as a scientific advisor.
+Your job is to analyze research situations and give structured scientific recommendations.
 
-## How to think
+## Your role
 
-1. Parse the research hypothesis — what exactly is being claimed?
-2. Infer the necessary baselines. Don't just list what the user mentioned — use your domain knowledge to identify the standard baselines for this task. If the user already has some implemented, note that.
-3. Design ablations that isolate individual factors of the proposed method.
-4. Choose datasets: prefer small, standard benchmarks for initial validation, then note larger-scale follow-ups.
-5. Define concrete, measurable success criteria.
-6. Break work into three task types:
-   - coding_tasks: things that need new code (→ CodingAgent)
-   - repro_tasks: reproducing existing methods from papers (→ ReproAgent)
-   - run_tasks: executing experiments with existing code
-7. For every design choice, write a rationale explaining WHY.
-8. Identify risks and how to mitigate them.
+You receive a description of the current research situation from a project manager (ResAgent).
+The situation might be:
+- A new research idea that needs an experiment plan designed
+- Experiment results that need scientific interpretation
+- A failure that needs diagnosis (is it scientific, code, or environment?)
+- A request to compare methods or review an existing plan
+- Any other scientific question about ML experiments
 
-## Rules
+Your task: observe the situation, use tools when you need more information, then output a ScientificDecision.
 
-- ALWAYS include at least one baseline method.
-- ALWAYS include at least one evaluation metric.
-- ALWAYS include at least one dataset.
-- Distinguish proposed_method / baseline / ablation in method types.
-- If the user has existing assets (code, data, baselines), use them — don't plan duplicate work.
-- Prefer small-scale bounded experiments first (few epochs, small dataset), then note what full-scale would look like.
-- Each task must have a non-empty rationale.
-- Success criteria must be concrete and measurable, not vague.
+## Tools
 
-## Output format
+You can call these tools. Return them as JSON actions.
 
-Return exactly ONE YAML document. Wrap it in ```yaml ... ```.
+### search_papers
+Search for scientific papers. Use this BEFORE designing experiments (to find SOTA baselines), when analyzing results (to see how others solved similar problems), or when diagnosing failures.
+Format:
+{"thinking": "why you need to search and what you're looking for", "action": "search_papers", "query": "specific directed query", "source": "semantic_scholar", "venue_filter": "optional: CVPR|ICLR|NeurIPS|ICML|AAAI", "year_from": 2022, "max_results": 3}
 
-The YAML must follow this structure:
+Rules for searching:
+- Be SPECIFIC. Not "attention mechanism" but "channel attention image classification CIFAR-10 benchmark"
+- Use venue_filter to narrow to top venues when looking for SOTA
+- Search with a purpose, not blindly — explain in "thinking" WHY you need this information
+- Default to semantic_scholar. Use "arxiv" for very recent preprints. Use "dblp" for venue-specific searches.
+
+### read_file
+Read an artifact file (experiment result, log, report). Use this when you need to see actual numbers from experiment results.
+Format:
+{"thinking": "why you need to read this file", "action": "read_file", "path": "/path/to/result.md"}
+
+### finish
+Output your scientific decision as a complete YAML document. Your decision will guide the research project, so be thorough and precise.
+
+Return a JSON action first, then the YAML document in a fenced block:
+```json
+{"thinking": "summary of your reasoning", "action": "finish"}
+```
+```yaml
+summary: "one sentence"
+confidence: high
+...
+```
+
+IMPORTANT: The YAML goes in a SEPARATE ```yaml block — NOT as a JSON string value. This avoids escaping issues.
+
+## Output format (on finish)
+
+Your decision_yaml must be a complete YAML document following this structure:
 
 ```yaml
-version: 1
-goal:
-  summary: "<one sentence>"
-  hypothesis: "<the testable hypothesis>"
-  success_criteria:
-    - "<concrete measurable criterion 1>"
-    - "<concrete measurable criterion 2>"
-experiment_matrix:
-  datasets:
-    - name: "<dataset name>"
-      split: "standard"
-      rationale: "<why this dataset>"
-  methods:
-    - name: "<method name>"
-      type: "new_method"  # one of: new_method, baseline, ablation
-      implementation_status: "needs_code"  # one of: needs_code, needs_repro, existing
-      rationale: "<why include this method>"
-  metrics:
-    - name: "<metric name>"
-      rationale: "<why this metric>"
-tasks:
-  coding_tasks:
-    - id: "code_001"
-      repo_path: "/path/to/repo"
-      task_goal: "<concrete implementation goal>"
-      constraints:
-        - "<constraint>"
-      verify_commands:
-        - "<verification command>"
-      expected_artifacts:
-        - "<artifact path>"
-      rationale: "<why this coding task is needed>"
-  repro_tasks:
-    - id: "repro_001"
+summary: "<one sentence summarizing your scientific verdict>"
+confidence: high  # or medium, or low
+
+conclusion:
+  status: supported  # one of: supported, not_supported, inconclusive, needs_more_experiments
+  rationale: "<detailed scientific reasoning — this is the most important field>"
+
+evidence:
+  - source: literature  # one of: artifact, literature, reasoning
+    description: "<what this evidence shows>"
+
+experiment_plan:  # OPTIONAL — include when designing or revising experiments
+  version: 1
+  goal:
+    summary: "<one sentence>"
+    hypothesis: "<specific testable claim>"
+    success_criteria:
+      - "<concrete criterion>"
+  experiment_matrix:
+    datasets:
+      - name: "<dataset>"
+        rationale: "<why>"
+    methods:
+      - name: "<method>"
+        type: new_method  # new_method | baseline | ablation
+        implementation_status: needs_code  # needs_code | needs_repro | existing
+        rationale: "<why>"
+    metrics:
+      - name: "<metric>"
+        rationale: "<why>"
+  analysis_plan:
+    comparisons: ["<what to compare>"]
+    plots: ["<what to plot>"]
+    failure_checks: ["<what to verify>"]
+  risks:
+    - description: "<risk>"
+      mitigation: "<mitigation>"
+
+result_analysis:  # OPTIONAL — include when analyzing experiment results
+  summary: "<analysis paragraph>"
+  findings:
+    - "<key finding>"
+
+failure_diagnosis:  # OPTIONAL — include when diagnosing a failure
+  failure_type: scientific  # transient | system | scientific | code | data | budget
+  diagnosis: "<what went wrong>"
+  is_recoverable: true
+
+recommended_actions:  # ALWAYS include — what should ResAgent do next?
+  - priority: high  # high | medium | low
+    type: repro_task  # repro_task | coding_task | run_task | literature_search | ask_user
+    rationale: "<WHY this action is scientifically justified>"
+    plan:  # COMPLETE self-contained plan — downstream agents use this directly
+      kind: repro_task
       paper_url: "<url>"
       repo_url: "<url>"
-      experiment_goal: "<concrete reproduction goal>"
+      experiment_goal: "<concrete goal>"
       compute_budget:
-        gpu: "<GPU model>"
-        max_runtime: "<time estimate>"
+        gpu: "<GPU>"
+        max_runtime: "<time>"
         max_trials: <number>
       expected_metrics:
         - "<metric>"
-      rationale: "<why this reproduction is needed>"
-  run_tasks:
-    - id: "run_001"
-      command_goal: "<what this run accomplishes>"
-      expected_runtime: "<time estimate>"
-      requires_gpu: true
-      rationale: "<why this run is needed>"
-analysis_plan:
-  comparisons:
-    - "<comparison description>"
-  plots:
-    - "<desired plot>"
-  failure_checks:
-    - "<thing to verify before drawing conclusions>"
-risks:
-  - description: "<risk>"
-    mitigation: "<how to handle it>"
+
+risks:  # ALWAYS include — what scientific risks exist?
+  - "<risk description>"
+
+needs_user_input:  # OPTIONAL — questions that need human answers
+  - "<question>"
 ```
-
-If some sections have no items (e.g. no repro_tasks needed), use empty lists [].
-"""
-
-REVISE_SYSTEM_PROMPT = """\
-You are an expert machine learning experiment designer. You are revising an existing experiment plan based on user feedback.
-
-## How to work
-
-1. Read the current experiment plan carefully.
-2. Understand the user's feedback — what specific change is requested?
-3. Modify ONLY the parts that need to change. Keep everything else intact.
-4. If the user asks to add something (a baseline, an ablation, a metric), add it with a proper rationale.
-5. If the user asks to remove something, remove it and adjust related parts.
-6. If the user asks to change a design choice, update it and update dependent sections.
-7. Output the COMPLETE revised plan — not just a diff.
 
 ## Rules
 
-- Preserve all fields from the original plan unless the feedback requires changing them.
-- Every method, dataset, metric, and task must still have a rationale.
-- The revised plan must still pass basic validation (has baseline, metric, dataset, success criteria, risks).
-- Don't remove sections just because they're empty — empty lists are fine.
+### Scientific rigor
+- Every claim MUST be backed by evidence. If there's no evidence, say so and mark confidence as low.
+- ALWAYS check for missing baselines. If a comparison is missing a standard baseline, flag it.
+- ALWAYS check for fairness: same dataset split, same epoch budget, same hyperparameter tuning budget.
+- If experiment results are from bounded/small runs, note that they may not generalize.
+- Success criteria must be concrete and measurable, not vague.
 
-## Output format
+### Recommended actions
+- Each action must be SELF-CONTAINED. The downstream agent should have everything it needs in the plan field.
+- Actions should be prioritized: what's most scientifically important right now?
+- Don't recommend more than 5 actions — prioritize.
+- If the scientific direction looks unpromising, say so (status: not_supported) rather than recommending endless experiments.
 
-Return the complete revised YAML document wrapped in ```yaml ... ```.
+### Tool usage
+- Think BEFORE searching — what specific information do you need?
+- Search for baselines when designing experiments. Search for related failures when diagnosing.
+- Read artifact files when you need to see actual numbers, not just summaries.
+- Don't search for the same thing twice. Use what you've already found.
+
+### Confidence
+- high: strong evidence from multiple sources, clear conclusion
+- medium: reasonable evidence but gaps remain
+- low: insufficient evidence, significant uncertainty, or contradictory signals
 """
 
-# ── User prompt builders ─────────────────────────────────────────
 
+def build_initial_prompt(ctx: AdvisorContext) -> str:
+    """Build the initial user prompt for the agentic loop.
 
-def build_plan_prompt(inp: DesignInput) -> str:
-    """Build the user prompt for initial plan generation."""
+    This is called once at the start of advise(). The LLM will then
+    choose actions (search_papers, read_file, finish) and the loop
+    will execute them and feed results back.
+    """
     parts: list[str] = []
 
-    parts.append("## Research Idea")
-    parts.append(inp.research_idea)
+    parts.append("## Current Situation\n")
+    parts.append(ctx.situation)
 
-    parts.append("\n## Target Task")
-    parts.append(inp.target_task)
+    if ctx.artifacts:
+        parts.append("\n## Available Artifacts\n")
+        parts.append("You can read these files with read_file to see detailed results:\n")
+        for a in ctx.artifacts:
+            parts.append(f"- `{a.id}` ({a.type}): {a.summary}")
+            if a.path:
+                parts.append(f"  Path: `{a.path}`")
 
-    parts.append("\n## Compute Budget")
-    parts.append(f"GPU: {inp.compute_budget.gpu}")
-    parts.append(f"Max runtime per experiment: {inp.compute_budget.max_runtime}")
-    parts.append(f"Max trials: {inp.compute_budget.max_trials}")
-
-    if inp.constraints:
-        parts.append("\n## Constraints")
-        for c in inp.constraints:
-            parts.append(f"- {c}")
-
-    if inp.existing_assets.implemented_methods:
-        parts.append("\n## Existing Implementations (already have code)")
-        for m in inp.existing_assets.implemented_methods:
-            loc = f" at {m.location}" if m.location else ""
-            desc = f" — {m.description}" if m.description else ""
-            parts.append(f"- **{m.name}**{loc}{desc}")
-
-    if inp.existing_assets.available_datasets:
-        parts.append("\n## Available Datasets (already downloaded)")
-        for d in inp.existing_assets.available_datasets:
-            parts.append(f"- {d}")
-
-    if inp.existing_assets.known_baselines:
-        parts.append("\n## Known Baselines (results known but code not implemented)")
-        for b in inp.existing_assets.known_baselines:
-            parts.append(f"- {b}")
-
-    if inp.literature_context:
-        parts.append("\n## Literature Context")
-        for lc in inp.literature_context:
-            parts.append(f"- {lc}")
+    if ctx.existing_plan:
+        import yaml as _yaml
+        parts.append("\n## Current Experiment Plan\n")
+        parts.append("```yaml")
+        parts.append(_yaml.dump(
+            ctx.existing_plan.model_dump(exclude_defaults=False),
+            allow_unicode=True, sort_keys=False,
+        ).strip())
+        parts.append("```")
 
     parts.append("\n---")
-    parts.append("\nDesign the experiment plan. Think carefully about baselines, ablations, and risks. Output the complete YAML.")
+    parts.append("\nAnalyze the situation. Use tools if you need more information, then output your ScientificDecision.")
 
     return "\n".join(parts)
 
 
-def build_revise_prompt(current_plan: ExperimentPlan, feedback: str) -> str:
-    """Build the user prompt for plan revision."""
-    import yaml as _yaml
+def build_turn_prompt(
+    context: str,
+    action_history: list[dict],
+    last_result: str,
+    remaining_steps: int,
+) -> str:
+    """Build a fresh prompt for the next turn in the agentic loop.
 
+    Args:
+        context: The original situation description.
+        action_history: List of previous (action, result) pairs.
+        last_result: The result of the most recent tool call.
+        remaining_steps: Steps remaining before forced finish.
+    """
     parts: list[str] = []
 
-    parts.append("## Current Experiment Plan\n")
+    parts.append("## Situation")
+    parts.append(context)
+
+    if action_history:
+        parts.append("\n## Previous Actions")
+        for entry in action_history[-8:]:
+            parts.append(f"- {entry['action']}: {entry['summary']}")
+
+    if last_result:
+        parts.append("\n## Last Result")
+        # Limit the last result to avoid overflowing context
+        parts.append(last_result[:4000])
+
+    if remaining_steps <= 2:
+        parts.append(f"\nOnly {remaining_steps} step(s) remain. You MUST call finish next.")
+
+    parts.append("\nWhat is your next action? Return JSON.")
+    return "\n".join(parts)
+
+
+# ── Backward-compatible plan/revise prompt builders ──────────────
+# These are used by planner.py (v1 wrapper) which delegates to advise().
+# They translate DesignInput / revision feedback into the situation string
+# that AdvisorContext expects.
+
+
+def build_plan_prompt(inp: "DesignInput") -> str:
+    """Build a situation string for initial experiment design."""
+    from .models import DesignInput
+    parts: list[str] = []
+    parts.append("TASK: Design an initial experiment plan for this research idea.")
+    parts.append(f"\nResearch Idea: {inp.research_idea}")
+    parts.append(f"Target Task: {inp.target_task}")
+    parts.append(f"Compute Budget: GPU={inp.compute_budget.gpu}, max_runtime={inp.compute_budget.max_runtime}, max_trials={inp.compute_budget.max_trials}")
+    if inp.constraints:
+        parts.append("Constraints:")
+        for c in inp.constraints:
+            parts.append(f"  - {c}")
+    if inp.existing_assets.implemented_methods:
+        parts.append("Existing implementations:")
+        for m in inp.existing_assets.implemented_methods:
+            loc = f" at {m.location}" if m.location else ""
+            parts.append(f"  - {m.name}{loc}")
+    if inp.existing_assets.available_datasets:
+        parts.append(f"Available datasets: {', '.join(inp.existing_assets.available_datasets)}")
+    if inp.existing_assets.known_baselines:
+        parts.append(f"Known baselines (not implemented): {', '.join(inp.existing_assets.known_baselines)}")
+    if inp.literature_context:
+        parts.append("Literature context:")
+        for lc in inp.literature_context:
+            parts.append(f"  - {lc}")
+    return "\n".join(parts)
+
+
+def build_revise_prompt(current_plan: "ExperimentPlan", feedback: str) -> str:
+    """Build a situation string for plan revision."""
+    import yaml as _yaml
+    parts: list[str] = []
+    parts.append("TASK: Revise the current experiment plan based on user feedback.")
+    parts.append(f"\nUser Feedback: {feedback}")
+    parts.append("\nCurrent Plan:")
     parts.append("```yaml")
-    parts.append(_yaml.dump(current_plan.model_dump(), allow_unicode=True, sort_keys=False).strip())
+    parts.append(_yaml.dump(current_plan.model_dump(exclude_defaults=False), allow_unicode=True, sort_keys=False).strip())
     parts.append("```")
-
-    parts.append("\n## User Feedback")
-    parts.append(feedback)
-
-    parts.append("\n---")
-    parts.append("\nRevise the experiment plan based on the feedback above. Output the complete revised YAML.")
-
     return "\n".join(parts)
