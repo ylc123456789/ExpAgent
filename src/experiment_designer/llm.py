@@ -1,7 +1,9 @@
 """LLM client — OpenAI-compatible API via urllib.
 
-Matches ReproAgent's llm.py style: no openai package, no chat history,
-fresh system+user per call, optional trace logging.
+Matches ReproAgent's llm.py and CodingAgent's llm.py style:
+- No openai package, no chat history.
+- API layer: retry 3x on transient errors (network, 5xx) with backoff.
+- Loop layer: advisor.py catches failures and injects as api_error steps.
 """
 
 from __future__ import annotations
@@ -9,6 +11,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -136,46 +140,62 @@ def call_llm(
     }
 
     url = _chat_completions_url(api_base)
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(body).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
+    last_error: Exception | None = None
 
-    with urllib.request.urlopen(req, timeout=180) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
-
-    choice = data["choices"][0]
-    msg = choice.get("message", {})
-
-    if trace_dir:
-        _write_trace(trace_dir, trace_label, "", json.dumps(messages, ensure_ascii=False),
-                     json.dumps(msg, ensure_ascii=False))
-
-    # Check for tool calls
-    tool_calls = msg.get("tool_calls", [])
-    if tool_calls:
-        tc = tool_calls[0]
-        func = tc.get("function", {})
+    for attempt in range(3):
         try:
-            arguments = json.loads(func.get("arguments", "{}"))
-        except json.JSONDecodeError:
-            arguments = {}
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(body).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except (urllib.error.URLError, OSError, TimeoutError) as exc:
+            last_error = exc
+            if attempt < 2:
+                time.sleep(min(2 ** attempt * 2, 30))
+            continue
+        except urllib.error.HTTPError as exc:
+            last_error = exc
+            if exc.code >= 500 and attempt < 2:
+                time.sleep(min(2 ** attempt * 2, 30))
+                continue
+            body_text = exc.read().decode("utf-8", errors="ignore")
+            raise RuntimeError(f"LLM request failed: {exc.code} {body_text}") from exc
+
+        choice = data["choices"][0]
+        msg = choice.get("message", {})
+
+        if trace_dir:
+            _write_trace(trace_dir, trace_label, "", json.dumps(messages, ensure_ascii=False),
+                         json.dumps(msg, ensure_ascii=False))
+
+        # Check for tool calls
+        tool_calls = msg.get("tool_calls", [])
+        if tool_calls:
+            tc = tool_calls[0]
+            func = tc.get("function", {})
+            try:
+                arguments = json.loads(func.get("arguments", "{}"))
+            except json.JSONDecodeError:
+                arguments = {}
+            return {
+                "type": "tool_call",
+                "name": func.get("name", "unknown"),
+                "arguments": arguments,
+            }
+
         return {
-            "type": "tool_call",
-            "name": func.get("name", "unknown"),
-            "arguments": arguments,
+            "type": "message",
+            "content": msg.get("content", ""),
         }
 
-    # Plain text message (no tool call)
-    return {
-        "type": "message",
-        "content": msg.get("content", ""),
-    }
+    raise RuntimeError(f"LLM API call failed after 3 retries: {last_error}")
 
 
 def _chat_completions_url(api_base: str) -> str:
