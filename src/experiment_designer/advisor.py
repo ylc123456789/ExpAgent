@@ -32,17 +32,28 @@ def advise(
     api_key_env: str = "DEEPSEEK_API_KEY",
     mock: bool = False,
     trace_dir: Path | None = None,
+    run_dir: Path | None = None,
 ) -> tuple[ScientificDecision, list[dict]]:
-    """Run the ExpAgent agentic loop and return a ScientificDecision."""
+    """Run the ExpAgent agentic loop and return a ScientificDecision.
+
+    Args:
+        run_dir: Output directory for this run (papers, logs). If None,
+                 defaults to Path.cwd() / "runs" / <timestamp>.
+    """
+    if run_dir is None:
+        from datetime import datetime, timezone
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        run_dir = Path.cwd() / "runs" / stamp
     policy = ContextPolicy.for_model(model)
-    return _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy)
+    return _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_dir)
 
 
 # ── Agentic loop ───────────────────────────────────────────────────
 
 
-def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy):
+def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_dir):
     """FC agentic loop: rebuild prompt each turn, keep only recent tool_pairs."""
+    papers_dir = run_dir / "papers"
     initial = build_initial_prompt(ctx)
     file_cache: dict[str, str] = {}
     trace: list[dict] = []
@@ -119,6 +130,7 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy):
                 url=args.get("url", ""),
                 code_url=args.get("code_url", ""),
                 one_liner=args.get("one_liner", ""),
+                output_dir=str(papers_dir),
             )
             entry = {
                 "title": args.get("title", ""),

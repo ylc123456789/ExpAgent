@@ -481,9 +481,10 @@ def _run_advise(args: argparse.Namespace) -> None:
     output_dir = args.output or _default_output_dir()
     mock = getattr(args, "mock_llm", False)
 
+    output_dir = args.output or _default_output_dir()
     print("ExpAgent analyzing...")
     decision, trace = advise(ctx, model=llm["model"], api_base=llm["api_base"],
-                             api_key_env=llm["api_key_env"], mock=mock)
+                             api_key_env=llm["api_key_env"], mock=mock, run_dir=output_dir)
 
     plan_path = write_decision(decision, output_dir)
     vr = validate_decision(decision)

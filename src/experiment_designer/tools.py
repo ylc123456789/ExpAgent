@@ -101,7 +101,7 @@ def save_paper(
     url: str = "",
     code_url: str = "",
     one_liner: str = "",
-    output_dir: str = "papers",
+    output_dir: str | Path = "papers",
 ) -> str:
     """Save a paper's metadata to disk for later on-demand reading.
 

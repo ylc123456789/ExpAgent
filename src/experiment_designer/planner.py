@@ -26,6 +26,7 @@ def plan(
     api_key_env: str = "DEEPSEEK_API_KEY",
     mock: bool = False,
     trace_dir: Path | None = None,
+    run_dir: Path | None = None,
 ) -> tuple[ExperimentPlan, list[str]]:
     """Generate a new experiment plan from a research idea.
 
@@ -41,7 +42,18 @@ def plan(
         api_key_env=api_key_env,
         mock=mock,
         trace_dir=trace_dir,
+        run_dir=run_dir,
     )
+
+    if decision.experiment_plan:
+        return _populate_tasks_from_actions(decision.experiment_plan, decision.recommended_actions), [f"confidence: {decision.confidence}"]
+
+    return current_plan, ["Revision did not produce a new experiment plan"]
+
+    if decision.experiment_plan:
+        return _populate_tasks_from_actions(decision.experiment_plan, decision.recommended_actions), [f"confidence: {decision.confidence}"]
+
+    return current_plan, ["Revision did not produce a new experiment plan"]
 
     if decision.experiment_plan:
         return _populate_tasks_from_actions(decision.experiment_plan, decision.recommended_actions), [f"confidence: {decision.confidence}"]
@@ -146,6 +158,7 @@ def revise(
     api_key_env: str = "DEEPSEEK_API_KEY",
     mock: bool = False,
     trace_dir: Path | None = None,
+    run_dir: Path | None = None,
 ) -> tuple[ExperimentPlan, list[str]]:
     """Revise an existing experiment plan based on user feedback.
 
@@ -161,12 +174,12 @@ def revise(
         api_key_env=api_key_env,
         mock=mock,
         trace_dir=trace_dir,
+        run_dir=run_dir,
     )
 
     if decision.experiment_plan:
         return _populate_tasks_from_actions(decision.experiment_plan, decision.recommended_actions), [f"confidence: {decision.confidence}"]
 
-    # Fallback: return the original plan with no changes
     return current_plan, ["Revision did not produce a new experiment plan"]
 
 
