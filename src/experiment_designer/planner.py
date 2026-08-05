@@ -48,12 +48,21 @@ def plan(
     if decision.experiment_plan:
         return _populate_tasks_from_actions(decision.experiment_plan, decision.recommended_actions), [f"confidence: {decision.confidence}"]
 
-    return current_plan, ["Revision did not produce a new experiment plan"]
-
-    if decision.experiment_plan:
-        return _populate_tasks_from_actions(decision.experiment_plan, decision.recommended_actions), [f"confidence: {decision.confidence}"]
-
-    return current_plan, ["Revision did not produce a new experiment plan"]
+    # Fallback: build a minimal plan from the decision
+    from .models import AnalysisPlan, ExperimentMatrix, ResearchGoal, Risk, TaskBundle, CodingTask, ReproTask, RunTask
+    tasks = TaskBundle(
+        coding_tasks=_extract_coding_tasks(decision.recommended_actions),
+        repro_tasks=_extract_repro_tasks(decision.recommended_actions),
+        run_tasks=_extract_run_tasks(decision.recommended_actions),
+    )
+    fallback = ExperimentPlan(
+        goal=ResearchGoal(summary=decision.summary, hypothesis=decision.conclusion.rationale[:200]),
+        experiment_matrix=ExperimentMatrix(),
+        tasks=tasks,
+        analysis_plan=AnalysisPlan(),
+        risks=[Risk(description=r) for r in decision.risks],
+    )
+    return fallback, [f"Fallback plan from decision (confidence: {decision.confidence})"]
 
     if decision.experiment_plan:
         return _populate_tasks_from_actions(decision.experiment_plan, decision.recommended_actions), [f"confidence: {decision.confidence}"]
