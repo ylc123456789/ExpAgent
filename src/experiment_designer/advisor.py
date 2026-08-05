@@ -13,11 +13,11 @@ from pathlib import Path
 
 import yaml
 
-from .context import LoopState, build_turn_prompt
+from .context import LoopState
 from .context_policy import ContextPolicy
 from .llm import call_llm
 from .models import AdvisorContext, ScientificDecision
-from .prompts import SYSTEM_PROMPT, build_initial_prompt
+from .prompts import SYSTEM_PROMPT, build_initial_prompt, build_turn_prompt
 from .tools import read_file, save_paper, search_papers
 from .validator import validate_decision
 
@@ -194,10 +194,6 @@ def _make_pair(name: str, args: dict, output: str, step: int) -> list[dict]:
                          "function": {"name": name, "arguments": json.dumps(args, ensure_ascii=False)}}]},
         {"role": "tool", "tool_call_id": f"call_{step}", "content": output[:8000]},
     ]
-
-
-def _make_assistant_msg(name: str, args: dict, step: int) -> dict:
-    return _make_pair(name, args, "", step)[0]
 
 
 def _execute_search(args: dict) -> str:

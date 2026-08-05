@@ -1,13 +1,95 @@
-"""Unified system prompt and user-prompt builders for ExpAgent v2.
+"""System prompt, tool schemas, and turn-prompt builders.
 
-One prompt system (like ReproAgent's controller) that handles all scientific
-advisory situations: designing experiments, analyzing results, diagnosing
-failures, comparing methods, and revising plans.
+Style-aligned with CodingAgent's controller/prompts.py:
+- SYSTEM_PROMPT: the system-level instruction
+- TOOLS: Function Calling tool schemas
+- build_turn_prompt: rebuild user prompt fresh from state each turn
+- build_initial_prompt: first-turn prompt from AdvisorContext
+- build_plan_prompt / build_revise_prompt: planner.py wrappers
 """
 
 from __future__ import annotations
 
+from .context import LoopState
+from .context_policy import ContextPolicy
 from .models import AdvisorContext, ArtifactRef
+
+
+# ── Function Calling tool schemas ──────────────────────────────────
+
+
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_papers",
+            "description": "Search for scientific papers. Be specific and purposeful — not blind keyword searches.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Specific search query. E.g. 'channel attention image classification CIFAR-10 benchmark' not 'attention'"},
+                    "source": {"type": "string", "enum": ["semantic_scholar", "dblp", "arxiv"], "default": "semantic_scholar", "description": "Which API to search"},
+                    "venue_filter": {"type": "string", "description": "Filter by venue, e.g. 'CVPR', 'ICLR', 'NeurIPS'. Leave empty for no filter."},
+                    "year_from": {"type": "integer", "description": "Only papers published after this year"},
+                    "max_results": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "Read a local artifact file (experiment result, log, report) to see detailed data.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to the file to read"},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "save_paper",
+            "description": "Save a paper to the library for later reference. Use when search results contain papers worth citing as baselines or SOTA.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "paper_id": {"type": "string", "description": "arXiv id, DOI, or paper id"},
+                    "title": {"type": "string", "description": "Paper title"},
+                    "first_author": {"type": "string", "description": "First author's last name"},
+                    "year": {"type": "integer", "description": "Publication year"},
+                    "abstract": {"type": "string", "description": "Paper abstract"},
+                    "url": {"type": "string", "description": "Paper URL"},
+                    "code_url": {"type": "string", "description": "Code repository URL if known"},
+                    "one_liner": {"type": "string", "description": "One sentence: why this matters for the current research"},
+                },
+                "required": ["paper_id", "title", "one_liner"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "finish",
+            "description": "Output your scientific decision as a YAML document when you have enough information.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "decision_yaml": {"type": "string", "description": "Complete YAML document with the ScientificDecision structure"},
+                },
+                "required": ["decision_yaml"],
+            },
+        },
+    },
+]
+
+
+# ── System prompt ──────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """\
 You are a machine learning research scientist serving as a scientific advisor.
@@ -231,6 +313,43 @@ def build_plan_prompt(inp: "DesignInput") -> str:
         parts.append("Literature context:")
         for lc in inp.literature_context:
             parts.append(f"  - {lc}")
+    return "\n".join(parts)
+
+
+def build_turn_prompt(state: LoopState, policy: ContextPolicy) -> str:
+    """Build a fresh user prompt from structured state each turn.
+
+    CodingAgent style: the full prompt is rebuilt from state, not appended
+    to a growing messages array. FC tool_pairs are handled separately in advisor.py.
+    """
+    parts: list[str] = [state.situation]
+
+    # Paper index (always in context — lightweight entries)
+    if state.paper_index:
+        parts.append("\n## Saved Papers")
+        shown = state.paper_index[-policy.paper_index_entries:]
+        for i, p in enumerate(shown, 1):
+            yr = f" ({p['year']})" if p.get('year') else ""
+            parts.append(f"[{i}] {p['title']}{yr} · {p.get('first_author', '?')} et al.")
+            parts.append(f"    {p.get('one_liner', '')[:policy.observation_tail]}")
+            parts.append(f"    paper: {p.get('paper_id', '')}  file: papers/{p.get('slug', '')}.md")
+
+    # Compressed step history (search queries + key results preserved)
+    if state.compressed:
+        parts.append("\n## Step History")
+        shown = state.compressed[-policy.step_history:]
+        for line in shown:
+            parts.append(line)
+
+    # File cache (recently read files — tail only)
+    if state.file_cache:
+        entries = list(state.file_cache.items())[-policy.file_cache_count:]
+        parts.append("\n## Recent File Reads")
+        for key, text in entries:
+            tail = text[-policy.file_cache_chars:]
+            parts.append(f"[{key}] ({len(text)} chars, tail {len(tail)}):\n{tail}")
+
+    parts.append("\n---\nWhat is your next action?")
     return "\n".join(parts)
 
 
