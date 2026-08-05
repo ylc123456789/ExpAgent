@@ -54,6 +54,27 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "save_paper",
+            "description": "Save a paper to the library for later reference. Use when search results contain papers worth citing as baselines or SOTA.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "paper_id": {"type": "string", "description": "arXiv id, DOI, or paper id"},
+                    "title": {"type": "string", "description": "Paper title"},
+                    "first_author": {"type": "string", "description": "First author's last name"},
+                    "year": {"type": "integer", "description": "Publication year"},
+                    "abstract": {"type": "string", "description": "Paper abstract"},
+                    "url": {"type": "string", "description": "Paper URL"},
+                    "code_url": {"type": "string", "description": "Code repository URL if known"},
+                    "one_liner": {"type": "string", "description": "One sentence: why this matters for the current research"},
+                },
+                "required": ["paper_id", "title", "one_liner"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "finish",
             "description": "Output your scientific decision as a YAML document when you have enough information.",
             "parameters": {

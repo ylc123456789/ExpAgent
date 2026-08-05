@@ -380,7 +380,8 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
 class ContextPolicy(BaseModel):
     """Limits for packing prompt context, scaled to model window size."""
 
-    step_history: int = 8          # how many previous steps to show
+    step_history: int = 8          # how many compressed steps to show
+    paper_index_entries: int = 8   # max papers in the index shown in prompt
     file_cache_count: int = 6      # how many file cache entries to include
     file_cache_chars: int = 4000   # max chars per file cache entry
     observation_tail: int = 500    # tail chars of last result
@@ -396,6 +397,7 @@ class ContextPolicy(BaseModel):
         if window >= 500_000:
             return cls(
                 step_history=20,
+                paper_index_entries=15,
                 file_cache_count=12,
                 file_cache_chars=8000,
                 observation_tail=2000,
@@ -405,6 +407,7 @@ class ContextPolicy(BaseModel):
         if window >= 128_000:
             return cls(
                 step_history=10,
+                paper_index_entries=8,
                 file_cache_count=6,
                 file_cache_chars=4000,
                 observation_tail=500,

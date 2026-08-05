@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 import urllib.parse
 import urllib.request
@@ -89,6 +90,52 @@ def search_papers(
         return _search_arxiv(query, max_results, year_from, year_to)
     else:
         raise ValueError(f"Unknown source: {source}")
+
+
+def save_paper(
+    paper_id: str,
+    title: str,
+    first_author: str = "",
+    year: int | None = None,
+    abstract: str = "",
+    url: str = "",
+    code_url: str = "",
+    one_liner: str = "",
+    output_dir: str = "papers",
+) -> str:
+    """Save a paper's metadata to disk for later on-demand reading.
+
+    Creates papers/{slug}.md with full metadata. The paper_index in context
+    keeps a lightweight reference; the LLM calls read_file when it needs details.
+    """
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "_", title.strip()).strip("_")[:80] or paper_id
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    filepath = out / f"{slug}.md"
+
+    parts = [
+        f"# {title}",
+        "",
+        f"- **Paper ID**: {paper_id}",
+        f"- **Authors**: {first_author} et al." if first_author else "",
+        f"- **Year**: {year}" if year else "",
+        f"- **URL**: {url}" if url else "",
+        f"- **Code**: {code_url}" if code_url else "",
+        "",
+        "## Why this paper matters",
+        one_liner or "(no summary provided)",
+        "",
+        "## Abstract",
+        abstract or "(no abstract available)",
+    ]
+    filepath.write_text("\n".join(parts), encoding="utf-8")
+
+    return (
+        f"Saved: {title}\n"
+        f"  Paper ID: {paper_id}\n"
+        f"  File: {filepath}\n"
+        f"  Read full details with read_file(\"{filepath}\")"
+    )
 
 
 def read_file(path: str, max_chars: int = 16_000) -> str:
