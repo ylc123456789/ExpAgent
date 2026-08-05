@@ -13,8 +13,10 @@ from pathlib import Path
 
 import yaml
 
+from .context import LoopState, build_turn_prompt
+from .context_policy import ContextPolicy
 from .llm import call_llm
-from .models import AdvisorContext, ContextPolicy, ScientificDecision
+from .models import AdvisorContext, ScientificDecision
 from .prompts import SYSTEM_PROMPT, build_initial_prompt
 from .tools import read_file, save_paper, search_papers
 from .validator import validate_decision
@@ -54,19 +56,16 @@ def advise(
 def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_dir):
     """FC agentic loop: rebuild prompt each turn, keep only recent tool_pairs."""
     papers_dir = run_dir / "papers"
-    initial = build_initial_prompt(ctx)
-    file_cache: dict[str, str] = {}
+    state = LoopState(situation=build_initial_prompt(ctx))
     trace: list[dict] = []
     effective_max = MAX_STEPS
     tool_pairs: list[dict] = []   # recent tool pairs for FC continuity
-    compressed: list[str] = []    # compressed history for user_prompt
-    paper_index: list[dict] = []  # saved papers (lightweight, always in prompt)
 
     for step in range(1, MAX_STEPS + MAX_EXTRA_AFTER_PROGRESS + 1):
         remaining = effective_max - step if step <= effective_max else 0
 
         # Rebuild user prompt from state each turn (CodingAgent style)
-        user_prompt = _build_user_prompt(initial, compressed, paper_index, file_cache, policy)
+        user_prompt = build_turn_prompt(state, policy)
 
         # Grace stop pressure
         if step >= effective_max - 2 or (step >= MAX_STEPS - 2 and effective_max == MAX_STEPS):
@@ -104,19 +103,19 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
 
         if name == "search_papers":
             output = _execute_search(args)
-            file_cache[f"search_{step}"] = output
+            state.file_cache[f"search_{step}"] = output
             trace.append({"action": "search_papers", "summary": f"q={args.get('query','')[:60]}, {_count_results(output)}"})
             # Compress: record what was searched
-            compressed.append(f"[Step {step}] Searched: {args.get('query','')[:120]} → {_count_results(output)}")
+            state.compressed.append(f"[Step {step}] Searched: {args.get('query','')[:120]} → {_count_results(output)}")
             if effective_max == MAX_STEPS:
                 effective_max += MAX_EXTRA_AFTER_PROGRESS
 
         elif name == "read_file":
             path = args.get("path", "")
             output = read_file(path) if path else "No path provided."
-            file_cache[path or f"file_{step}"] = output
+            state.file_cache[path or f"file_{step}"] = output
             trace.append({"action": "read_file", "summary": f"path={path[:80]}"})
-            compressed.append(f"[Step {step}] Read: {path[:120]} ({len(output)} chars)")
+            state.compressed.append(f"[Step {step}] Read: {path[:120]} ({len(output)} chars)")
             if effective_max == MAX_STEPS:
                 effective_max += MAX_EXTRA_AFTER_PROGRESS
 
@@ -140,9 +139,9 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
                 "paper_id": args.get("paper_id", ""),
                 "slug": _slugify(args.get("title", "")),
             }
-            paper_index.append(entry)
+            state.paper_index.append(entry)
             trace.append({"action": "save_paper", "summary": args.get("title", "")[:80]})
-            compressed.append(f"[Step {step}] Saved paper: {entry['title'][:120]}")
+            state.compressed.append(f"[Step {step}] Saved paper: {entry['title'][:120]}")
 
         elif name == "finish":
             yaml_text = args.get("decision_yaml", "")
@@ -184,36 +183,6 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
 
 
 # ── Helpers ───────────────────────────────────────────────────────
-
-
-def _build_user_prompt(initial: str, compressed: list[str], paper_index: list[dict],
-                       file_cache: dict[str, str], policy: ContextPolicy) -> str:
-    """Rebuild user prompt from state each turn."""
-    parts = [initial]
-
-    if paper_index:
-        parts.append("\n## Saved Papers")
-        for i, p in enumerate(paper_index[-policy.paper_index_entries:], 1):
-            yr = f" ({p['year']})" if p.get('year') else ""
-            parts.append(f"[{i}] {p['title']}{yr} · {p.get('first_author','?')} et al.")
-            parts.append(f"    {p.get('one_liner','')[:120]}")
-            parts.append(f"    paper: {p.get('paper_id','')}  file: papers/{p.get('slug','')}.md")
-
-    if compressed:
-        parts.append("\n## Step History")
-        shown = compressed[-policy.step_history:]
-        for line in shown:
-            parts.append(line)
-
-    if file_cache:
-        entries = list(file_cache.items())[-policy.file_cache_count:]
-        parts.append("\n## Recent File Reads")
-        for key, text in entries:
-            tail = text[-policy.file_cache_chars:]
-            parts.append(f"[{key}] ({len(text)} chars, tail {len(tail)}):\n{tail}")
-
-    parts.append("\n---\nWhat is your next action?")
-    return "\n".join(parts)
 
 
 def _make_pair(name: str, args: dict, output: str, step: int) -> list[dict]:
