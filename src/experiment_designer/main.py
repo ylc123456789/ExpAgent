@@ -321,7 +321,7 @@ def _print_welcome() -> None:
     """Print the REPL welcome banner."""
     print()
     print("  ╔══════════════════════════════════════════╗")
-    print("  ║  ExpAgent — Experiment Design Assistant  ║")
+    print("  ║  ExpAgent — Scientific Advisor  ║")
     print("  ║  Type /help for commands                 ║")
     print("  ╚══════════════════════════════════════════╝")
     print()

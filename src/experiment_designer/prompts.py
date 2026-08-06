@@ -282,8 +282,9 @@ def build_initial_prompt(ctx: AdvisorContext) -> str:
     return "\n".join(parts)
 
 
-# ── Backward-compatible plan/revise prompt builders ──────────────
-# These are used by planner.py (v1 wrapper) which delegates to advise().
+# ── Plan/revise prompt builders ──────────────────────────────────
+# Used by planner.py to translate DesignInput → situation string
+# for advise().
 # They translate DesignInput / revision feedback into the situation string
 # that AdvisorContext expects.
 

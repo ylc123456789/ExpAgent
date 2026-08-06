@@ -1,4 +1,8 @@
-# ExpAgent Scientific Advisor Refactor
+# ExpAgent Scientific Advisor Refactor (HISTORICAL — 2026-08-03)
+
+> ⚠️ This document was the original design proposal before implementation.
+> The final implementation differs significantly. See DEVELOPMENT_PLAN.md
+> and ARCHITECTURE_SYNC.md for current architecture.
 
 ## 1. 背景
 

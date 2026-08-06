@@ -1,4 +1,4 @@
-"""Agentic loop for ExpAgent v2 — the scientific advisor.
+"""Agentic loop for ExpAgent — the scientific advisor.
 
 Uses Function Calling for reliable tool use.
 Context: CodingAgent-style "rebuild prompt from state each turn" +

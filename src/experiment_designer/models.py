@@ -179,7 +179,7 @@ class ValidationResult(BaseModel):
     issues: list[str] = Field(default_factory=list)
 
 
-# ── v2: Scientific Advisor models ─────────────────────────────────
+# ── Scientific Advisor models ────────────────────────────────────
 
 
 class ArtifactRef(BaseModel):
