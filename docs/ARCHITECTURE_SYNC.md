@@ -66,7 +66,7 @@ expagent advise --context "设计一个实验..." -o runs/001/
 
 | ExpAgent plan field | CodeTaskSpec field |
 |---------------------|-------------------|
-| `repo_path` | `repo_path` |
+| `workspace_path` | `workspace_path` |
 | `task_goal` | `task_goal` |
 | `constraints` | `constraints` |
 | `verify_commands` | `verify_commands` |

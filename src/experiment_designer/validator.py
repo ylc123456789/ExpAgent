@@ -80,8 +80,8 @@ def validate(plan: ExperimentPlan) -> ValidationResult:
             issues.append(f"coding_tasks[{i}] ({t.id}): task_goal is empty")
         if not t.rationale.strip():
             issues.append(f"coding_tasks[{i}] ({t.id}): rationale is empty")
-        if not t.repo_path.strip() and not t.task_goal.strip():
-            issues.append(f"coding_tasks[{i}] ({t.id}): both repo_path and task_goal are empty")
+        if not t.workspace_path.strip() and not t.task_goal.strip():
+            issues.append(f"coding_tasks[{i}] ({t.id}): both workspace_path and task_goal are empty")
 
     for i, t in enumerate(repro):
         if not t.id.strip():

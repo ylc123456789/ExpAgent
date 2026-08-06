@@ -44,7 +44,7 @@ def _make_plan(**overrides) -> ExperimentPlan:
         tasks=TaskBundle(
             coding_tasks=[
                 CodingTask(
-                    id="code_001", repo_path="/path/to/repo",
+                    id="code_001", workspace_path="/path/to/repo",
                     task_goal="Implement proposed_A", rationale="New code needed",
                 )
             ],
@@ -186,13 +186,13 @@ class TestValidationFails:
         assert vr.status == "needs_revision"
         assert any("task_goal" in issue.lower() for issue in vr.issues)
 
-    def test_empty_repo_path(self) -> None:
+    def test_empty_workspace_path(self) -> None:
         plan = _make_plan()
-        plan.tasks.coding_tasks[0].repo_path = ""
+        plan.tasks.coding_tasks[0].workspace_path = ""
         plan.tasks.coding_tasks[0].task_goal = ""
         vr = validate(plan)
         assert vr.status == "needs_revision"
-        assert any("repo_path" in issue.lower() or "task_goal" in issue.lower() for issue in vr.issues)
+        assert any("workspace_path" in issue.lower() or "task_goal" in issue.lower() for issue in vr.issues)
 
     def test_empty_repro_paper_url(self) -> None:
         plan = _make_plan()

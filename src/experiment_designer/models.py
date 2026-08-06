@@ -102,7 +102,7 @@ class CodingTask(BaseModel):
     """
 
     id: str = Field(description="Unique task id, e.g. 'code_001'")
-    repo_path: str = Field(description="Path to the target repository")
+    workspace_path: str = Field(description="Path to the target repository")
     task_goal: str = Field(description="What this coding task should accomplish")
     constraints: list[str] = Field(default_factory=list)
     verify_commands: list[str] = Field(default_factory=list)
@@ -245,7 +245,7 @@ class SuggestedPlan(BaseModel):
         description="Whether code is available: public (has repo), upon_request (email author), none (no code). Only relevant for repro tasks."
     )
     # For coding tasks
-    repo_path: str = ""
+    workspace_path: str = ""
     task_goal: str = ""
     constraints: list[str] = Field(default_factory=list)
     verify_commands: list[str] = Field(default_factory=list)
@@ -276,7 +276,7 @@ class RecommendedAction(BaseModel):
     priority: Literal["high", "medium", "low"] = Field(
         description="How urgent/important this action is"
     )
-    type: Literal["repro_task", "coding_task", "run_task", "literature_search", "ask_user"] = Field(
+    type: Literal["repro_task", "coding_task", "run_task", "literature_search", "literature_reference", "ask_user"] = Field(
         description="What kind of action to take"
     )
     rationale: str = Field(

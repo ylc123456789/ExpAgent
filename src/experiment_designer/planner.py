@@ -83,7 +83,7 @@ def _extract_coding_tasks(actions: list) -> list:
             p = a.plan
             tasks.append(CodingTask(
                 id=f"code_{i+1:03d}",
-                repo_path=p.repo_path or "",
+                workspace_path=p.workspace_path or "",
                 task_goal=p.task_goal or p.experiment_goal or a.rationale[:100],
                 constraints=p.constraints,
                 verify_commands=p.verify_commands,

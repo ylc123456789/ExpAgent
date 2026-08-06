@@ -89,7 +89,7 @@ class TestExperimentPlan:
             tasks=TaskBundle(
                 coding_tasks=[
                     CodingTask(
-                        id="code_001", repo_path="/path/to/repo",
+                        id="code_001", workspace_path="/path/to/repo",
                         task_goal="Implement proposed attention",
                         rationale="New code needed",
                     )
@@ -129,7 +129,7 @@ class TestCodingTask:
     def test_minimal_coding_task(self) -> None:
         t = CodingTask(
             id="code_001",
-            repo_path="/path/to/repo",
+            workspace_path="/path/to/repo",
             task_goal="Implement X",
         )
         assert t.id == "code_001"
@@ -140,7 +140,7 @@ class TestCodingTask:
     def test_full_coding_task(self) -> None:
         t = CodingTask(
             id="code_002",
-            repo_path="/path/to/repo",
+            workspace_path="/path/to/repo",
             task_goal="Implement proposed method",
             constraints=["Do not modify training entry"],
             verify_commands=["pytest tests/", "python -c 'import model'"],
