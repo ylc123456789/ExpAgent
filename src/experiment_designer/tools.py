@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import re
 import time
@@ -14,6 +15,11 @@ import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
+
+try:
+    import pdfplumber as _pdfplumber
+except ImportError:
+    _pdfplumber = None
 
 # ── Rate limits ──────────────────────────────────────────────────
 
@@ -130,12 +136,73 @@ def save_paper(
     ]
     filepath.write_text("\n".join(parts), encoding="utf-8")
 
+    # Try to download full text for arXiv papers
+    full_text = ""
+    if _is_arxiv_id(paper_id):
+        full_text = _download_arxiv_full_text(paper_id, out)
+
+    if full_text:
+        # Append full text to the metadata file
+        with filepath.open("a", encoding="utf-8") as f:
+            f.write("\n\n## Full Text\n\n")
+            f.write(full_text[:50000])  # Cap at 50K chars
+        return (
+            f"Saved: {title}\n"
+            f"  Paper ID: {paper_id}\n"
+            f"  File: {filepath}\n"
+            f"  Full text: {len(full_text)} chars downloaded from arXiv\n"
+            f"  Read with read_file(\"{filepath}\")"
+        )
+
     return (
         f"Saved: {title}\n"
         f"  Paper ID: {paper_id}\n"
         f"  File: {filepath}\n"
         f"  Read full details with read_file(\"{filepath}\")"
     )
+
+
+# ── arXiv full-text download ─────────────────────────────────────
+
+
+def _is_arxiv_id(paper_id: str) -> bool:
+    """Check if a paper ID looks like an arXiv identifier."""
+    clean = paper_id.replace("arxiv:", "").replace("arXiv:", "").strip()
+    return bool(re.match(r"^\d{4}\.\d{4,5}(v\d+)?$", clean))
+
+
+def _download_arxiv_full_text(arxiv_id: str, output_dir: Path) -> str:
+    """Download PDF from arXiv and extract text. Returns text or '' on error."""
+    if _pdfplumber is None:
+        return ""
+
+    clean = arxiv_id.replace("arxiv:", "").replace("arXiv:", "").strip()
+    clean = re.sub(r"v\d+$", "", clean)
+    pdf_url = f"https://arxiv.org/pdf/{clean}.pdf"
+
+    try:
+        req = urllib.request.Request(
+            pdf_url,
+            headers={"User-Agent": "ExpAgent/0.2 (mailto:research@example.com)"},
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            pdf_data = resp.read()
+    except Exception:
+        return ""
+
+    if len(pdf_data) < 1000:
+        return ""
+
+    try:
+        text_parts = []
+        with _pdfplumber.open(io.BytesIO(pdf_data)) as pdf:
+            for page in pdf.pages[:30]:
+                page_text = page.extract_text()
+                if page_text:
+                    text_parts.append(page_text)
+        return "\n\n".join(text_parts)
+    except Exception:
+        return ""
 
 
 def read_file(path: str, max_chars: int = 16_000) -> str:
