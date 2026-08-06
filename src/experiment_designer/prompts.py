@@ -278,6 +278,11 @@ Operational fields (workspace_path, constraints, verify_commands, compute_budget
 - Check Findings section before re-reading — it may already have what you need.
 - Don't search for the same thing twice.
 
+### When to stop searching
+- If after reading the paper and searching you still cannot find exact details (e.g., specific hyperparameters), record what you DO know via note_finding and PROCEED to finish.
+- Not all papers report every detail. Mark uncertainty in your confidence and conclusion instead of endlessly searching.
+- Before searching, check Findings — if you already recorded an answer, don't search for the same thing again.
+
 ### Confidence
 - high: strong evidence from multiple sources, clear conclusion
 - medium: reasonable evidence but gaps remain
