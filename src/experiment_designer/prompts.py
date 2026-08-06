@@ -201,6 +201,7 @@ recommended_actions:  # ALWAYS include — what should ResAgent do next?
     rationale: "<WHY this action is scientifically justified>"
     plan:  # COMPLETE self-contained plan — downstream agents use this directly
       kind: repro_task
+      task_goal: "<one-line summary of what this task achieves>"
       paper_url: "<url>"
       repo_url: "<url>"
       experiment_goal: "<concrete goal>"
@@ -210,6 +211,15 @@ recommended_actions:  # ALWAYS include — what should ResAgent do next?
         max_trials: <number>
       expected_metrics:
         - "<metric>"
+
+  - priority: high
+    type: coding_task
+    rationale: "<WHY this coding task is scientifically justified>"
+    plan:
+      kind: coding_task
+      task_goal: "<one-line summary of what this implements>"
+      expected_metrics:
+        - "<metric to verify>"
 
 risks:  # ALWAYS include — what scientific risks exist?
   - "<risk description>"
