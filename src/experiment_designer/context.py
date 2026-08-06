@@ -17,4 +17,5 @@ class LoopState:
     situation: str                                    # original task description
     compressed: list[str] = field(default_factory=list)   # step history (one-line each)
     paper_index: list[dict] = field(default_factory=list)  # saved paper entries
+    findings: list[dict] = field(default_factory=list)     # note_finding records
     file_cache: dict[str, str] = field(default_factory=dict)  # path → content

@@ -227,9 +227,17 @@ def read_file(path: str, max_chars: int = 16_000) -> str:
         return f"[ERROR reading file: {e}]"
 
     if len(text) > max_chars:
-        head = text[:500]
-        tail = text[-max_chars + 500:]
-        return f"[File: {p} ({len(text)} chars total — showing head 500 + tail {max_chars - 500})]\n{head}\n...\n{tail}"
+        third = max_chars // 3
+        head = text[:third]
+        mid_start = len(text) // 2 - third // 2
+        middle = text[mid_start:mid_start + third]
+        tail = text[-third:]
+        return (
+            f"[File: {p} ({len(text)} chars total — showing head/middle/tail {third} each)]\n"
+            f"--- BEGINNING ---\n{head}\n"
+            f"--- MIDDLE (around char {mid_start}) ---\n{middle}\n"
+            f"--- END ---\n{tail}"
+        )
 
     return f"[File: {p} ({len(text)} chars)]\n{text}"
 

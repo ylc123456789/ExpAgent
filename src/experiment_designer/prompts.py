@@ -41,7 +41,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "read_file",
-            "description": "Read a local artifact file (experiment result, log, report) to see detailed data.",
+            "description": "Read a file to see its content. After reading, immediately call note_finding to record key insights so you don't forget.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -69,6 +69,22 @@ TOOLS = [
                     "one_liner": {"type": "string", "description": "One sentence: why this matters for the current research"},
                 },
                 "required": ["paper_id", "title", "one_liner"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "note_finding",
+            "description": "Record a key finding after reading a file or paper. This persists in context so you don't need to re-read the same file. Use after read_file to capture what you learned.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic": {"type": "string", "description": "Short label, e.g. 'SENet CIFAR-10 training setup'"},
+                    "finding": {"type": "string", "description": "What you found. Be specific: numbers, method names, hyperparameters."},
+                    "source": {"type": "string", "description": "Which file or paper this came from"},
+                },
+                "required": ["topic", "finding"],
             },
         },
     },
@@ -257,9 +273,10 @@ Operational fields (workspace_path, constraints, verify_commands, compute_budget
 
 ### Tool usage
 - Think BEFORE searching — what specific information do you need?
-- Search for baselines when designing experiments. Search for related failures when diagnosing.
-- Read artifact files when you need to see actual numbers, not just summaries.
-- Don't search for the same thing twice. Use what you've already found.
+- Search for baselines when designing experiments.
+- IMMEDIATELY after read_file, call note_finding with the key result. Do NOT re-read without recording first. If you skip note_finding, you WILL forget what you read.
+- Check Findings section before re-reading — it may already have what you need.
+- Don't search for the same thing twice.
 
 ### Confidence
 - high: strong evidence from multiple sources, clear conclusion
@@ -346,6 +363,16 @@ def build_turn_prompt(state: LoopState, policy: ContextPolicy) -> str:
     to a growing messages array. FC tool_pairs are handled separately in advisor.py.
     """
     parts: list[str] = [state.situation]
+
+    # Findings from reading (LLM's conclusions, not raw text)
+    if state.findings:
+        parts.append("\n## Findings from Reading")
+        shown = state.findings[-policy.paper_index_entries:]
+        for i, f in enumerate(shown, 1):
+            parts.append(f"[{i}] {f['topic']}")
+            parts.append(f"    {f['finding'][:300]}")
+            if f.get('source'):
+                parts.append(f"    source: {f['source']}")
 
     # Paper index (always in context — lightweight entries)
     if state.paper_index:

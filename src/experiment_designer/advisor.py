@@ -120,6 +120,14 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
             if effective_max == MAX_STEPS:
                 effective_max += MAX_EXTRA_AFTER_PROGRESS
 
+        elif name == "note_finding":
+            topic = args.get("topic", "")
+            finding = args.get("finding", "")
+            source = args.get("source", "")
+            state.findings.append({"topic": topic, "finding": finding, "source": source})
+            trace.append({"action": "note_finding", "summary": topic[:80]})
+            output = f"Finding recorded: {topic}"
+
         elif name == "save_paper":
             output = save_paper(
                 paper_id=args.get("paper_id", ""),
