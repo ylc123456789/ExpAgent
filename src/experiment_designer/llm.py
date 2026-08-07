@@ -170,14 +170,14 @@ def _mock_tool_response(messages: list[dict]) -> dict:
             "name": "search_papers",
             "arguments": {"query": "channel attention image classification benchmark", "max_results": 3},
         }
-    # Finish with YAML
-    import yaml as _yaml
+    # Finish with JSON
+    import json as _json
     decision = _make_mock_design_decision()
-    yaml_str = _yaml.dump(decision, allow_unicode=True, sort_keys=False)
+    json_str = _json.dumps(decision, ensure_ascii=False)
     return {
         "type": "tool_call",
         "name": "finish",
-        "arguments": {"decision_yaml": yaml_str},
+        "arguments": {"decision_json": json_str},
     }
 
 

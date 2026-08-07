@@ -92,13 +92,13 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "finish",
-            "description": "Output your scientific decision as a YAML document when you have enough information.",
+            "description": "Output your scientific decision as a JSON object when you have enough information.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "decision_yaml": {"type": "string", "description": "Complete YAML document with the ScientificDecision structure"},
+                    "decision_json": {"type": "string", "description": "Complete JSON object with the ScientificDecision structure"},
                 },
-                "required": ["decision_yaml"],
+                "required": ["decision_json"],
             },
         },
     },
@@ -144,98 +144,74 @@ Format:
 {"thinking": "why you need to read this file", "action": "read_file", "path": "/path/to/result.md"}
 
 ### finish
-Output your scientific decision as a complete YAML document. Your decision will guide the research project, so be thorough and precise.
+Call finish with a complete JSON object in the decision_json field. The value is a JSON-encoded string containing your ScientificDecision.
 
-Return a JSON action first, then the YAML document in a fenced block:
-```json
-{"thinking": "summary of your reasoning", "action": "finish"}
-```
-```yaml
-summary: "one sentence"
-confidence: high
-...
-```
+Example call:
+{"thinking": "final summary of reasoning", "action": "finish", "decision_json": "{\"summary\": \"...\", \"confidence\": \"medium\", \"conclusion\": {\"status\": \"supported\", \"rationale\": \"...\"}, ...}"}
 
-IMPORTANT: The YAML goes in a SEPARATE ```yaml block — NOT as a JSON string value. This avoids escaping issues.
+## decision_json structure (MUST be valid JSON)
 
-## Output format (on finish)
+The JSON object inside decision_json follows this schema. Include all required fields.
 
-Your decision_yaml must be a complete YAML document following this structure:
+Required fields: summary, confidence, conclusion, evidence, recommended_actions, risks
+Optional fields: experiment_plan, result_analysis, failure_diagnosis, needs_user_input
 
-```yaml
-summary: "<one sentence summarizing your scientific verdict>"
-confidence: high  # or medium, or low
-
-conclusion:
-  status: supported  # one of: supported, not_supported, inconclusive, needs_more_experiments
-  rationale: "<detailed scientific reasoning — this is the most important field>"
-
-evidence:
-  - source: literature  # one of: artifact, literature, reasoning
-    description: "<what this evidence shows>"
-
-experiment_plan:  # OPTIONAL — include when designing or revising experiments
-  version: 1
-  goal:
-    summary: "<one sentence>"
-    hypothesis: "<specific testable claim>"
-    success_criteria:
-      - "<concrete criterion>"
-  experiment_matrix:
-    datasets:
-      - name: "<dataset>"
-        rationale: "<why>"
-    methods:
-      - name: "<method>"
-        type: new_method  # new_method | baseline | ablation
-        implementation_status: needs_code  # needs_code | needs_repro | existing
-        rationale: "<why>"
-    metrics:
-      - name: "<metric>"
-        rationale: "<why>"
-  analysis_plan:
-    comparisons: ["<what to compare>"]
-    plots: ["<what to plot>"]
-    failure_checks: ["<what to verify>"]
-  risks:
-    - description: "<risk>"
-      mitigation: "<mitigation>"
-
-result_analysis:  # OPTIONAL — include when analyzing experiment results
-  summary: "<analysis paragraph>"
-  findings:
-    - "<key finding>"
-
-failure_diagnosis:  # OPTIONAL — include when diagnosing a failure
-  failure_type: scientific  # transient | system | scientific | code | data | budget
-  diagnosis: "<what went wrong>"
-  is_recoverable: true
-
-recommended_actions:  # ALWAYS include — what should ResAgent do next?
-  - priority: high  # high | medium | low
-    type: repro_task  # repro_task | coding_task | run_task | literature_search | ask_user
-    rationale: "<WHY this action is scientifically justified>"
-    plan:  # COMPLETE self-contained plan — downstream agents use this directly
-      kind: repro_task
-      task_goal: "<one-line summary of what this task achieves>"
-      paper_url: "<url>"
-      repo_url: "<url>"
-      experiment_goal: "<concrete goal>"
-      compute_budget:
-        gpu: "<GPU>"
-        max_runtime: "<time>"
-        max_trials: <number>
-      expected_metrics:
-        - "<metric>"
-
-  - priority: high
-    type: coding_task
-    rationale: "<WHY this coding task is scientifically justified>"
-    plan:
-      kind: coding_task
-      task_goal: "<one-line summary of what this implements>"
-      expected_metrics:
-        - "<metric to verify>"
+{
+  "summary": "one sentence summarizing your scientific verdict",
+  "confidence": "medium",
+  "conclusion": {
+    "status": "supported",
+    "rationale": "detailed scientific reasoning"
+  },
+  "evidence": [
+    {"source": "literature", "description": "what this evidence shows"}
+  ],
+  "experiment_plan": {
+    "version": 1,
+    "goal": {
+      "summary": "one sentence",
+      "hypothesis": "specific testable claim",
+      "success_criteria": ["concrete criterion"]
+    },
+    "experiment_matrix": {
+      "datasets": [{"name": "...", "rationale": "..."}],
+      "methods": [{"name": "...", "type": "baseline", "implementation_status": "needs_repro", "rationale": "..."}],
+      "metrics": [{"name": "...", "rationale": "..."}]
+    },
+    "tasks": {
+      "coding_tasks": [{"id": "code_001", "workspace_path": "", "task_goal": "...", "rationale": "..."}],
+      "repro_tasks": [],
+      "run_tasks": []
+    },
+    "analysis_plan": {"comparisons": [""], "plots": [""], "failure_checks": [""]},
+    "risks": [{"description": "...", "mitigation": "..."}]
+  },
+  "result_analysis": {
+    "summary": "analysis text",
+    "findings": ["key finding"]
+  },
+  "failure_diagnosis": {
+    "failure_type": "scientific",
+    "diagnosis": "what went wrong",
+    "is_recoverable": true
+  },
+  "recommended_actions": [
+    {
+      "priority": "high",
+      "type": "repro_task",
+      "rationale": "WHY",
+      "plan": {
+        "kind": "repro_task",
+        "task_goal": "summary",
+        "paper_url": "...",
+        "repo_url": "...",
+        "experiment_goal": "concrete goal"
+      }
+    }
+  ],
+  "risks": ["risk description"],
+  "needs_user_input": []
+}
 
 risks:  # ALWAYS include — what scientific risks exist?
   - "<risk description>"
