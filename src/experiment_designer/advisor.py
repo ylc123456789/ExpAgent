@@ -18,6 +18,7 @@ from .context_policy import ContextPolicy
 from .llm import call_llm
 from .models import AdvisorContext, ScientificDecision
 from .prompts import SYSTEM_PROMPT, build_initial_prompt, build_turn_prompt
+from .report import write_state
 from .tools import read_file, save_paper, search_papers
 from .validator import validate_decision
 
@@ -167,6 +168,8 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
             vr = validate_decision(decision)
             trace.append({"action": "finish", "summary": decision.summary[:100]})
             if vr.status == "ok":
+                write_state(run_dir, ctx.situation, model, trace,
+                            decision.model_dump(), state.paper_index, state.findings)
                 return decision, trace
             issues_text = "\n".join(f"- {i}" for i in vr.issues)
             trace.append({"action": "validate", "summary": f"{len(vr.issues)} issues"})
@@ -185,6 +188,7 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
 
     # Loop exhausted
     from .models import ScientificConclusion
+    write_state(run_dir, ctx.situation, model, trace, None, state.paper_index, state.findings)
     return ScientificDecision(
         summary="Step budget exhausted.",
         confidence="low",

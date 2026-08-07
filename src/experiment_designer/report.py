@@ -89,6 +89,44 @@ def _represent_yaml(data: dict) -> str:
     )
 
 
+def write_state(
+    run_dir: Path,
+    situation: str,
+    model: str,
+    trace: list[dict],
+    decision: dict | None,
+    paper_index: list[dict],
+    findings: list[dict],
+) -> Path:
+    """Write state.json — full run record with every step visible.
+
+    Matches ReproAgent's state.json pattern: one file tells the whole story.
+    """
+    import json as _json
+    from datetime import datetime, timezone
+
+    run_dir.mkdir(parents=True, exist_ok=True)
+    path = run_dir / "state.json"
+
+    data = {
+        "run_at": datetime.now(timezone.utc).isoformat(),
+        "task": {"situation": situation, "model": model},
+        "steps": [],
+    }
+
+    for i, t in enumerate(trace, 1):
+        step = {"step": i, "action": t.get("action", "?"), "summary": t.get("summary", "")}
+        data["steps"].append(step)
+
+    data["paper_index"] = paper_index
+    data["findings"] = findings
+    if decision:
+        data["result"] = decision
+
+    path.write_text(_json.dumps(data, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    return path
+
+
 def write_decision(decision: ScientificDecision, output_dir: Path) -> Path:
     """Write scientific_decision.yaml to output_dir. Creates directory if needed.
 
