@@ -142,7 +142,7 @@ class TestPlannerTraceDir:
             research_idea="Test idea",
             target_task="classification",
         )
-        trace_dir = _runs_dir() / "test_traces"
+        trace_dir = _runs_dir("test_traces")
         if trace_dir.exists():
             import shutil
             shutil.rmtree(trace_dir)
@@ -153,7 +153,9 @@ class TestPlannerTraceDir:
         assert len(resp_files) > 0, "No response trace files found"
 
 
-def _runs_dir() -> Path:
-    """Return the project-local runs directory for test artifacts."""
+def _runs_dir(*subdirs: str) -> Path:
+    """Return runs/tests/<subdirs>/<timestamp>/ for isolated test artifacts."""
+    from datetime import datetime, timezone
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     project_root = Path(__file__).resolve().parent.parent
-    return project_root / "runs" / "tests"
+    return project_root / "runs" / "tests" / Path(*subdirs) / stamp

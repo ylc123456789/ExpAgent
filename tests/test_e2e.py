@@ -339,7 +339,7 @@ class TestReportWrite:
         """Generated plan should survive a write-reread roundtrip."""
         result, _ = _call_plan(simple_idea)
 
-        output_dir = _runs_dir() / "test_write_reread"
+        output_dir = _runs_dir("test_write_reread")
         if output_dir.exists():
             shutil.rmtree(output_dir)
         path = write_plan(result, output_dir)
@@ -366,6 +366,7 @@ def _call_plan(inp: DesignInput, **kwargs) -> tuple:
         model="deepseek-chat",
         api_base="https://api.deepseek.com/v1",
         api_key_env="DEEPSEEK_API_KEY",
+        run_dir=_runs_dir("plan"),
         **kwargs,
     )
 
@@ -388,7 +389,7 @@ class TestAdvisorV2:
                 "Target Task: image classification\n"
             )
         )
-        decision, trace = advise(ctx, api_key_env="DEEPSEEK_API_KEY")
+        decision, trace = advise(ctx, api_key_env="DEEPSEEK_API_KEY", run_dir=_runs_dir("advisor"))
         assert decision.summary
         assert decision.confidence in ("high", "medium", "low")
         assert decision.conclusion.status
@@ -411,7 +412,7 @@ class TestAdvisorV2:
                             summary="proposed method: 82.1% accuracy, baseline: 83.7%"),
             ],
         )
-        decision, trace = advise(ctx, api_key_env="DEEPSEEK_API_KEY")
+        decision, trace = advise(ctx, api_key_env="DEEPSEEK_API_KEY", run_dir=_runs_dir("advisor"))
         assert decision.summary
         assert decision.conclusion.status
         # Should have some evidence
@@ -431,7 +432,7 @@ class TestAdvisorV2:
                 "Target Task: time series forecasting\n"
             )
         )
-        decision, trace = advise(ctx, api_key_env="DEEPSEEK_API_KEY")
+        decision, trace = advise(ctx, api_key_env="DEEPSEEK_API_KEY", run_dir=_runs_dir("advisor"))
         vr = validate_decision(decision)
         # Core fields must be present
         assert decision.summary
@@ -452,7 +453,7 @@ class TestAdvisorV2:
                 "Target Task: image classification\n"
             )
         )
-        decision, trace = advise(ctx, api_key_env="DEEPSEEK_API_KEY")
+        decision, trace = advise(ctx, api_key_env="DEEPSEEK_API_KEY", run_dir=_runs_dir("advisor"))
 
         for action in decision.recommended_actions:
             plan = action.plan
@@ -524,7 +525,9 @@ class TestV2Models:
         assert ctx.artifacts[0].id == "a1"
 
 
-def _runs_dir() -> Path:
-    """Return the project-local runs directory for test artifacts."""
+def _runs_dir(*subdirs: str) -> Path:
+    """Return runs/tests/<subdirs>/<timestamp>/ for isolated test artifacts."""
+    from datetime import datetime, timezone
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     project_root = Path(__file__).resolve().parent.parent
-    return project_root / "runs" / "tests"
+    return project_root / "runs" / "tests" / Path(*subdirs) / stamp
