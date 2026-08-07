@@ -158,7 +158,8 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
                 decision = _parse_decision(yaml_text)
             except Exception as e:
                 trace.append({"action": "finish", "summary": f"parse error: {str(e)[:80]}"})
-                tool_pairs = _make_pair(name, args, f"Parse error: {e}. Fix and call finish again.", step)
+                state.compressed.append(f"[Step {step}] finish PARSE ERROR: {e}")
+                tool_pairs = []
                 continue
 
             vr = validate_decision(decision)
@@ -167,7 +168,9 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
                 return decision, trace
             issues_text = "\n".join(f"- {i}" for i in vr.issues)
             trace.append({"action": "validate", "summary": f"{len(vr.issues)} issues"})
-            tool_pairs = _make_pair(name, args, f"Validation issues:\n{issues_text}\nFix and call finish again.", step)
+            # Write failure to state so build_turn_prompt shows it clearly
+            state.compressed.append(f"[Step {step}] finish REJECTED: {issues_text}")
+            tool_pairs = []
             continue
 
         else:
