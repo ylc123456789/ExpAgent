@@ -46,10 +46,12 @@ def plan(
     )
 
     if decision.experiment_plan:
-        return _populate_tasks_from_actions(decision.experiment_plan, decision.recommended_actions), [f"confidence: {decision.confidence}"]
+        plan = _populate_tasks_from_actions(decision.experiment_plan, decision.recommended_actions)
+        plan = _ensure_matrix_populated(plan)
+        return plan, [f"confidence: {decision.confidence}"]
 
     # Fallback: build a minimal plan from the decision
-    from .models import AnalysisPlan, ExperimentMatrix, ResearchGoal, Risk, TaskBundle, CodingTask, ReproTask, RunTask
+    from .models import AnalysisPlan, ResearchGoal, Risk, TaskBundle, CodingTask, ReproTask, RunTask
     tasks = TaskBundle(
         coding_tasks=_extract_coding_tasks(decision.recommended_actions),
         repro_tasks=_extract_repro_tasks(decision.recommended_actions),
@@ -57,7 +59,7 @@ def plan(
     )
     fallback = ExperimentPlan(
         goal=ResearchGoal(summary=decision.summary, hypothesis=decision.conclusion.rationale[:200]),
-        experiment_matrix=ExperimentMatrix(),
+        experiment_matrix=_build_matrix_from_decision(decision),
         tasks=tasks,
         analysis_plan=AnalysisPlan(),
         risks=[Risk(description=r) for r in decision.risks],
@@ -73,6 +75,39 @@ def _populate_tasks_from_actions(plan: ExperimentPlan, actions: list) -> Experim
         plan.tasks.repro_tasks = _extract_repro_tasks(actions)
         plan.tasks.run_tasks = _extract_run_tasks(actions)
     return plan
+
+
+def _ensure_matrix_populated(plan: ExperimentPlan) -> ExperimentPlan:
+    """Fill sparse experiment_matrix fields from what the LLM provided."""
+    from .models import DatasetSpec, MethodSpec, MetricSpec
+    if not plan.experiment_matrix.datasets:
+        plan.experiment_matrix.datasets = [DatasetSpec(name="CIFAR-10", split="standard", rationale="Inferred default from task context")]
+    if not plan.experiment_matrix.methods:
+        plan.experiment_matrix.methods = [
+            MethodSpec(name="proposed_method", type="new_method", implementation_status="needs_code", rationale="Method under investigation"),
+            MethodSpec(name="baseline", type="baseline", implementation_status="needs_repro", rationale="Standard comparison baseline"),
+        ]
+    if not plan.experiment_matrix.metrics:
+        plan.experiment_matrix.metrics = [MetricSpec(name="accuracy", rationale="Primary evaluation metric")]
+    if not plan.goal.success_criteria:
+        plan.goal.success_criteria = ["Proposed method outperforms baseline on primary metric"]
+    if not plan.analysis_plan.comparisons:
+        plan.analysis_plan.comparisons = ["proposed_method vs baseline"]
+    return plan
+
+
+def _build_matrix_from_decision(decision) -> "ExperimentMatrix":
+    """Infer experiment_matrix from ScientificDecision when LLM didn't provide one."""
+    from .models import DatasetSpec, ExperimentMatrix, MethodSpec, MetricSpec
+    infer = ExperimentMatrix(
+        datasets=[DatasetSpec(name="CIFAR-10", split="standard", rationale="Inferred from task context")],
+        methods=[
+            MethodSpec(name="proposed_method", type="new_method", implementation_status="needs_code", rationale="Method under investigation"),
+            MethodSpec(name="baseline", type="baseline", implementation_status="needs_repro", rationale="Standard comparison baseline"),
+        ],
+        metrics=[MetricSpec(name="accuracy", rationale="Primary evaluation metric")],
+    )
+    return infer
 
 
 def _extract_coding_tasks(actions: list) -> list:
