@@ -32,7 +32,7 @@ def call_llm(
     trace_dir: Path | None = None,
     trace_label: str = "llm",
 ) -> dict:
-    """Call LLM with tool definitions, returning parsed tool_call or message.
+    """Call LLM with tool definitions, returning parsed tool calls or message.
 
     Args:
         messages: List of message dicts [{"role": "system", "content": ...}, ...].
@@ -41,9 +41,8 @@ def call_llm(
 
     Returns:
         dict with keys:
-        - "type": "tool_call" | "message" | "error"
-        - "name": tool name (if tool_call)
-        - "arguments": dict of parsed arguments (if tool_call)
+        - "type": "tool_calls" | "message" | "error"
+        - "calls": list of {"name": str, "arguments": dict} (if tool_calls)
         - "content": str (if message)
         - "error": str (if error)
     """
@@ -103,20 +102,21 @@ def call_llm(
             _write_trace(trace_dir, trace_label, "", json.dumps(messages, ensure_ascii=False),
                          json.dumps(msg, ensure_ascii=False))
 
-        # Check for tool calls
+        # Check for tool calls — DeepSeek may return multiple parallel calls
         tool_calls = msg.get("tool_calls", [])
         if tool_calls:
-            tc = tool_calls[0]
-            func = tc.get("function", {})
-            try:
-                arguments = json.loads(func.get("arguments", "{}"))
-            except json.JSONDecodeError:
-                arguments = {}
-            return {
-                "type": "tool_call",
-                "name": func.get("name", "unknown"),
-                "arguments": arguments,
-            }
+            calls: list[dict] = []
+            for tc in tool_calls:
+                func = tc.get("function", {})
+                try:
+                    arguments = json.loads(func.get("arguments", "{}"))
+                except json.JSONDecodeError:
+                    arguments = {}
+                calls.append({
+                    "name": func.get("name", "unknown"),
+                    "arguments": arguments,
+                })
+            return {"type": "tool_calls", "calls": calls}
 
         return {
             "type": "message",
@@ -166,18 +166,22 @@ def _mock_tool_response(messages: list[dict]) -> dict:
 
     if _MOCK_TOOL_STEP <= 1 and "finish" not in last_msg.lower():
         return {
-            "type": "tool_call",
-            "name": "search_papers",
-            "arguments": {"query": "channel attention image classification benchmark", "max_results": 3},
+            "type": "tool_calls",
+            "calls": [{
+                "name": "search_papers",
+                "arguments": {"query": "channel attention image classification benchmark", "max_results": 3},
+            }],
         }
     # Finish with JSON
     import json as _json
     decision = _make_mock_design_decision()
     json_str = _json.dumps(decision, ensure_ascii=False)
     return {
-        "type": "tool_call",
-        "name": "finish",
-        "arguments": {"decision_json": json_str},
+        "type": "tool_calls",
+        "calls": [{
+            "name": "finish",
+            "arguments": {"decision_json": json_str},
+        }],
     }
 
 

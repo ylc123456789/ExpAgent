@@ -1,7 +1,7 @@
 # ExpAgent Multi-Tool-Call Fix — Handover Document
 
 **Date**: 2026-08-07
-**Status**: Bug confirmed, fix attempted but incomplete
+**Status**: Fixed in working tree — see `docs/MULTI_TOOL_CALL_FIX_POSTMORTEM.md`
 **Working baseline**: commit `9dfd2f2` (3/3 e2e passed, JSON format)
 
 ---

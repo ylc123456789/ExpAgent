@@ -98,93 +98,107 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
             trace.append({"action": "message", "summary": result.get("content", "")[:100]})
             continue
 
-        if result["type"] != "tool_call":
+        if result["type"] != "tool_calls":
             trace.append({"action": "error", "summary": str(result.get("error", ""))[:100]})
             break
 
-        name = result["name"]
-        args = result["arguments"]
+        first_pair: list[dict] | None = None
 
-        if name == "search_papers":
-            output = _execute_search(args)
-            state.file_cache[f"search_{step}"] = output
-            trace.append({"action": "search_papers", "summary": f"q={args.get('query','')[:60]}, {_count_results(output)}"})
-            # Compress: record what was searched
-            state.compressed.append(f"[Step {step}] Searched: {args.get('query','')[:120]} → {_count_results(output)}")
-            if effective_max == MAX_STEPS:
-                effective_max += MAX_EXTRA_AFTER_PROGRESS
+        for call_index, call in enumerate(result["calls"]):
+            name = call["name"]
+            args = call["arguments"]
+            output = ""
 
-        elif name == "read_file":
-            path = args.get("path", "")
-            output = read_file(path) if path else "No path provided."
-            state.file_cache[path or f"file_{step}"] = output
-            trace.append({"action": "read_file", "summary": f"path={path[:80]}"})
-            state.compressed.append(f"[Step {step}] Read: {path[:120]} ({len(output)} chars)")
-            if effective_max == MAX_STEPS:
-                effective_max += MAX_EXTRA_AFTER_PROGRESS
+            if name == "search_papers":
+                output = _execute_search(args)
+                state.file_cache[f"search_{step}_{call_index}"] = output
+                trace.append({"action": "search_papers", "summary": f"q={args.get('query','')[:60]}, {_count_results(output)}"})
+                # Compress: record what was searched
+                state.compressed.append(f"[Step {step}] Searched: {args.get('query','')[:120]} → {_count_results(output)}")
+                if effective_max == MAX_STEPS:
+                    effective_max += MAX_EXTRA_AFTER_PROGRESS
 
-        elif name == "note_finding":
-            topic = args.get("topic", "")
-            finding = args.get("finding", "")
-            source = args.get("source", "")
-            state.findings.append({"topic": topic, "finding": finding, "source": source})
-            trace.append({"action": "note_finding", "summary": topic[:80]})
-            output = f"Finding recorded: {topic}"
+            elif name == "read_file":
+                path = args.get("path", "")
+                output = read_file(path) if path else "No path provided."
+                state.file_cache[path or f"file_{step}_{call_index}"] = output
+                trace.append({"action": "read_file", "summary": f"path={path[:80]}"})
+                state.compressed.append(f"[Step {step}] Read: {path[:120]} ({len(output)} chars)")
+                if effective_max == MAX_STEPS:
+                    effective_max += MAX_EXTRA_AFTER_PROGRESS
 
-        elif name == "save_paper":
-            output = save_paper(
-                paper_id=args.get("paper_id", ""),
-                title=args.get("title", ""),
-                first_author=args.get("first_author", ""),
-                year=args.get("year"),
-                abstract=args.get("abstract", ""),
-                url=args.get("url", ""),
-                code_url=args.get("code_url", ""),
-                one_liner=args.get("one_liner", ""),
-                output_dir=str(papers_dir),
-            )
-            entry = {
-                "title": args.get("title", ""),
-                "first_author": args.get("first_author", ""),
-                "year": args.get("year"),
-                "one_liner": args.get("one_liner", ""),
-                "paper_id": args.get("paper_id", ""),
-                "slug": _slugify(args.get("title", "")),
-            }
-            state.paper_index.append(entry)
-            trace.append({"action": "save_paper", "summary": args.get("title", "")[:80]})
-            state.compressed.append(f"[Step {step}] Saved paper: {entry['title'][:120]}")
+            elif name == "note_finding":
+                topic = args.get("topic", "")
+                finding = args.get("finding", "")
+                source = args.get("source", "")
+                state.findings.append({"topic": topic, "finding": finding, "source": source})
+                trace.append({"action": "note_finding", "summary": topic[:80]})
+                output = f"Finding recorded: {topic}"
 
-        elif name == "finish":
-            yaml_text = args.get("decision_json", "")
-            try:
-                decision = _parse_decision(yaml_text)
-            except Exception as e:
-                trace.append({"action": "finish", "summary": f"parse error: {str(e)[:80]}"})
-                state.compressed.append(f"[Step {step}] finish PARSE ERROR: {e}")
-                tool_pairs = _make_pair(name, args, f"Parse error: {e}. Fix and call finish again.", step)
-                continue
+            elif name == "save_paper":
+                output = save_paper(
+                    paper_id=args.get("paper_id", ""),
+                    title=args.get("title", ""),
+                    first_author=args.get("first_author", ""),
+                    year=args.get("year"),
+                    abstract=args.get("abstract", ""),
+                    url=args.get("url", ""),
+                    code_url=args.get("code_url", ""),
+                    one_liner=args.get("one_liner", ""),
+                    output_dir=str(papers_dir),
+                )
+                entry = {
+                    "title": args.get("title", ""),
+                    "first_author": args.get("first_author", ""),
+                    "year": args.get("year"),
+                    "one_liner": args.get("one_liner", ""),
+                    "paper_id": args.get("paper_id", ""),
+                    "slug": _slugify(args.get("title", "")),
+                }
+                state.paper_index.append(entry)
+                trace.append({"action": "save_paper", "summary": args.get("title", "")[:80]})
+                state.compressed.append(f"[Step {step}] Saved paper: {entry['title'][:120]}")
 
-            vr = validate_decision(decision)
-            trace.append({"action": "finish", "summary": decision.summary[:100]})
-            if vr.status == "ok":
-                write_state(run_dir, ctx.situation, model, trace,
-                            decision.model_dump(), state.paper_index, state.findings)
-                return decision, trace
-            issues_text = "\n".join(f"- {i}" for i in vr.issues)
-            trace.append({"action": "validate", "summary": f"{len(vr.issues)} issues"})
-            state.compressed.append(f"[Step {step}] finish REJECTED: {issues_text}")
-            tool_pairs = _make_pair(name, args, f"Validation issues:\n{issues_text}\nFix and call finish again.", step)
-            continue
+            elif name == "finish":
+                yaml_text = args.get("decision_json", "")
+                try:
+                    decision = _parse_decision(yaml_text)
+                except Exception as e:
+                    trace.append({"action": "finish", "summary": f"parse error: {str(e)[:80]}"})
+                    state.compressed.append(f"[Step {step}] finish PARSE ERROR: {e}")
+                    output = f"Parse error: {e}. Fix and call finish again."
+                    if call_index == 0:
+                        first_pair = _make_pair(name, args, output, step)
+                    break
 
-        else:
-            output = f"Unknown tool: {name}"
-            trace.append({"action": "unknown", "summary": name})
+                vr = validate_decision(decision)
+                trace.append({"action": "finish", "summary": decision.summary[:100]})
+                if vr.status == "ok":
+                    write_state(run_dir, ctx.situation, model, trace,
+                                decision.model_dump(), state.paper_index, state.findings)
+                    return decision, trace
+                issues_text = "\n".join(f"- {i}" for i in vr.issues)
+                trace.append({"action": "validate", "summary": f"{len(vr.issues)} issues"})
+                state.compressed.append(f"[Step {step}] finish REJECTED: {issues_text}")
+                output = f"Validation issues:\n{issues_text}\nFix and call finish again."
+                if call_index == 0:
+                    first_pair = _make_pair(name, args, output, step)
+                break
 
-        # Add new tool pair, limit to MAX_TOOL_PAIRS
-        tool_pairs += _make_pair(name, args, output, step)
-        if len(tool_pairs) > MAX_TOOL_PAIRS * 2:
-            tool_pairs = tool_pairs[-(MAX_TOOL_PAIRS * 2):]
+            else:
+                output = f"Unknown tool: {name}"
+                trace.append({"action": "unknown", "summary": name})
+                state.compressed.append(f"[Step {step}] Unknown tool: {name}")
+
+            if call_index == 0:
+                first_pair = _make_pair(name, args, output, step)
+
+        # Add only the first call's tool pair for FC continuity.
+        # Results of additional parallel calls are already in state.compressed.
+        if first_pair:
+            tool_pairs += first_pair
+            if len(tool_pairs) > MAX_TOOL_PAIRS * 2:
+                tool_pairs = tool_pairs[-(MAX_TOOL_PAIRS * 2):]
 
     # Loop exhausted
     from .models import ScientificConclusion

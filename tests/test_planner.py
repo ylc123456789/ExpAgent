@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
-from experiment_designer.models import DesignInput, ComputeBudget
+import experiment_designer.advisor as advisor_mod
+import experiment_designer.llm as llm_mod
+from experiment_designer.advisor import advise
+from experiment_designer.models import AdvisorContext, ComputeBudget, DesignInput
 from experiment_designer.planner import plan, revise
 from experiment_designer.validator import validate
 
@@ -74,6 +78,101 @@ class TestPlannerMock:
         types = {m.type for m in result.experiment_matrix.methods}
         assert "baseline" in types, "No baseline in mock plan"
         assert "new_method" in types, "No new_method in mock plan"
+
+
+class TestMultiToolCalls:
+    """Regression tests for DeepSeek returning multiple parallel tool_calls."""
+
+    def test_call_llm_returns_all_parallel_tool_calls(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        payload = {
+            "choices": [{
+                "message": {
+                    "tool_calls": [
+                        {
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {"name": "search_papers", "arguments": json.dumps({"query": "alpha"})},
+                        },
+                        {
+                            "id": "call_2",
+                            "type": "function",
+                            "function": {"name": "note_finding", "arguments": json.dumps({"topic": "t", "finding": "f"})},
+                        },
+                    ]
+                }
+            }]
+        }
+
+        class _Resp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return json.dumps(payload).encode("utf-8")
+
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        monkeypatch.setattr(llm_mod.urllib.request, "urlopen", lambda req, timeout: _Resp())
+
+        result = llm_mod.call_llm(
+            model="deepseek-chat",
+            api_base="https://api.deepseek.com/v1",
+            api_key_env="DEEPSEEK_API_KEY",
+            system="system",
+            messages=[{"role": "user", "content": "hi"}],
+        )
+
+        assert result["type"] == "tool_calls"
+        assert [c["name"] for c in result["calls"]] == ["search_papers", "note_finding"]
+        assert result["calls"][0]["arguments"] == {"query": "alpha"}
+        assert result["calls"][1]["arguments"] == {"topic": "t", "finding": "f"}
+
+    def test_advisor_executes_all_parallel_tool_calls(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        decision_json = json.dumps({
+            "summary": "Multi-tool regression decision",
+            "confidence": "medium",
+            "conclusion": {
+                "status": "needs_more_experiments",
+                "rationale": "Regression test rationale is intentionally specific enough.",
+            },
+            "evidence": [{"source": "reasoning", "description": "Both parallel calls must be executed."}],
+            "recommended_actions": [{
+                "priority": "high",
+                "type": "coding_task",
+                "rationale": "Keep the regression test executable.",
+                "plan": {"kind": "coding_task", "task_goal": "No-op regression task"},
+            }],
+            "risks": ["Regression test only"],
+            "needs_user_input": [],
+        })
+        responses = iter([
+            {
+                "type": "tool_calls",
+                "calls": [
+                    {"name": "note_finding", "arguments": {"topic": "first topic", "finding": "first finding", "source": "test"}},
+                    {"name": "note_finding", "arguments": {"topic": "second topic", "finding": "second finding", "source": "test"}},
+                ],
+            },
+            {
+                "type": "tool_calls",
+                "calls": [{"name": "finish", "arguments": {"decision_json": decision_json}}],
+            },
+        ])
+
+        monkeypatch.setattr(advisor_mod, "call_llm", lambda **kwargs: next(responses))
+
+        decision, trace = advise(
+            AdvisorContext(situation="multi tool regression"),
+            run_dir=tmp_path,
+            trace_dir=tmp_path / "logs",
+        )
+
+        assert decision.summary == "Multi-tool regression decision"
+        assert [t["summary"] for t in trace if t["action"] == "note_finding"] == ["first topic", "second topic"]
+        state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+        assert [f["topic"] for f in state["findings"]] == ["first topic", "second topic"]
 
 
 class TestPlannerReviseMock:
