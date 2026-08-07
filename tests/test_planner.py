@@ -130,23 +130,6 @@ class TestMultiToolCalls:
         assert result["calls"][1]["arguments"] == {"topic": "t", "finding": "f"}
 
     def test_advisor_executes_all_parallel_tool_calls(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-        decision_json = json.dumps({
-            "summary": "Multi-tool regression decision",
-            "confidence": "medium",
-            "conclusion": {
-                "status": "needs_more_experiments",
-                "rationale": "Regression test rationale is intentionally specific enough.",
-            },
-            "evidence": [{"source": "reasoning", "description": "Both parallel calls must be executed."}],
-            "recommended_actions": [{
-                "priority": "high",
-                "type": "coding_task",
-                "rationale": "Keep the regression test executable.",
-                "plan": {"kind": "coding_task", "task_goal": "No-op regression task"},
-            }],
-            "risks": ["Regression test only"],
-            "needs_user_input": [],
-        })
         responses = iter([
             {
                 "type": "tool_calls",
@@ -157,7 +140,18 @@ class TestMultiToolCalls:
             },
             {
                 "type": "tool_calls",
-                "calls": [{"name": "finish", "arguments": {"decision_json": decision_json}}],
+                "calls": [{"name": "finish", "arguments": {
+                    "summary": "Multi-tool regression decision",
+                    "confidence": "medium",
+                    "conclusion_status": "needs_more_experiments",
+                    "conclusion_rationale": "Regression test rationale.",
+                    "evidence": [{"source": "reasoning", "description": "Both parallel calls executed."}],
+                    "recommended_actions": [{"priority": "high", "type": "coding_task",
+                        "rationale": "Keep test executable",
+                        "plan": {"kind": "coding_task", "task_goal": "No-op regression task"}}],
+                    "risks": ["Regression test only"],
+                    "needs_user_input": [],
+                }}],
             },
         ])
 

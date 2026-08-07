@@ -11,8 +11,6 @@ import json
 import re
 from pathlib import Path
 
-import yaml
-
 from .context import LoopState
 from .context_policy import ContextPolicy
 from .llm import call_llm
@@ -160,13 +158,26 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
                 state.compressed.append(f"[Step {step}] Saved paper: {entry['title'][:120]}")
 
             elif name == "finish":
-                yaml_text = args.get("decision_json", "")
                 try:
-                    decision = _parse_decision(yaml_text)
+                    decision = ScientificDecision(
+                        summary=args.get("summary", ""),
+                        confidence=args.get("confidence", "medium"),
+                        conclusion={
+                            "status": args.get("conclusion_status", "inconclusive"),
+                            "rationale": args.get("conclusion_rationale", ""),
+                        },
+                        evidence=args.get("evidence", []),
+                        experiment_plan=args.get("experiment_plan"),
+                        result_analysis=args.get("result_analysis"),
+                        failure_diagnosis=args.get("failure_diagnosis"),
+                        recommended_actions=args.get("recommended_actions", []),
+                        risks=args.get("risks", []),
+                        needs_user_input=args.get("needs_user_input", []),
+                    )
                 except Exception as e:
-                    trace.append({"action": "finish", "summary": f"parse error: {str(e)[:80]}"})
-                    state.compressed.append(f"[Step {step}] finish PARSE ERROR: {e}")
-                    output = f"Parse error: {e}. Fix and call finish again."
+                    trace.append({"action": "finish", "summary": f"build error: {str(e)[:80]}"})
+                    state.compressed.append(f"[Step {step}] finish BUILD ERROR: {e}")
+                    output = f"Build error: {e}. Fix field types."
                     if call_index == 0:
                         first_pair = _make_pair(name, args, output, step)
                     break
@@ -260,23 +271,6 @@ def _execute_search(args: dict) -> str:
 def _count_results(output: str) -> str:
     m = re.search(r"Found (\d+) papers?", output)
     return f"{m.group(1)}p" if m else "?"
-
-
-def _parse_decision(text: str) -> ScientificDecision:
-    if not text:
-        raise ValueError("Empty")
-    text = text.strip()
-    for f in ("```json", "```yaml", "```"):
-        if text.startswith(f):
-            text = text[len(f):].strip()
-    if text.endswith("```"):
-        text = text[:-3].strip()
-    try:
-        data = json.loads(text)
-    except (json.JSONDecodeError, ValueError):
-        import yaml as _yaml
-        data = _yaml.safe_load(text)
-    return ScientificDecision.model_validate(data)
 
 
 def _slugify(title: str) -> str:

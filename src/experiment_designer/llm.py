@@ -172,15 +172,23 @@ def _mock_tool_response(messages: list[dict]) -> dict:
                 "arguments": {"query": "channel attention image classification benchmark", "max_results": 3},
             }],
         }
-    # Finish with JSON
-    import json as _json
+    # Finish with structured args
     decision = _make_mock_design_decision()
-    json_str = _json.dumps(decision, ensure_ascii=False)
     return {
         "type": "tool_calls",
         "calls": [{
             "name": "finish",
-            "arguments": {"decision_json": json_str},
+            "arguments": {
+                "summary": decision["summary"],
+                "confidence": decision["confidence"],
+                "conclusion_status": decision["conclusion"]["status"],
+                "conclusion_rationale": decision["conclusion"]["rationale"],
+                "evidence": decision["evidence"],
+                "recommended_actions": decision["recommended_actions"],
+                "experiment_plan": decision.get("experiment_plan"),
+                "risks": decision["risks"],
+                "needs_user_input": decision.get("needs_user_input", []),
+            },
         }],
     }
 
