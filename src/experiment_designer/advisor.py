@@ -46,6 +46,8 @@ def advise(
         from datetime import datetime, timezone
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         run_dir = Path.cwd() / "runs" / stamp
+    if trace_dir is None:
+        trace_dir = run_dir / "logs"
     policy = ContextPolicy.for_model(model)
     return _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_dir)
 
