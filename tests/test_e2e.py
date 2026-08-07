@@ -35,15 +35,23 @@ needs_api_key = pytest.mark.skipif(
 
 
 @pytest.fixture
-def simple_idea() -> DesignInput:
+def simple_idea(tmp_path: Path) -> DesignInput:
     """A simple, well-scoped research idea for testing."""
+    project_dir = tmp_path / "my_project"
+    resnet_path = project_dir / "models" / "resnet.py"
+    resnet_path.parent.mkdir(parents=True, exist_ok=True)
+    resnet_path.write_text(
+        '"""Minimal ResNet-18 fixture used by e2e tests."""\n',
+        encoding="utf-8",
+    )
+
     return DesignInput(
         research_idea=(
             "我想验证一种新的通道注意力机制在CIFAR-10图像分类上的效果。"
             "核心假设是：通过对通道权重做L2归一化后再缩放，"
             "可以让注意力权重更稳定，比SE-block在训练初期收敛更快，"
-            "同时最终精度不下降。我已经有一个PyTorch项目在 "
-            "/home/cyl/my_project，里面有标准的ResNet-18训练代码。"
+            f"同时最终精度不下降。我已经有一个PyTorch项目在 {project_dir}，"
+            "里面有标准的ResNet-18训练代码。"
         ),
         target_task="image classification",
         compute_budget=ComputeBudget(
@@ -55,7 +63,7 @@ def simple_idea() -> DesignInput:
             implemented_methods=[
                 ExistingMethod(
                     name="resnet18_base",
-                    location="/home/cyl/my_project/models/resnet.py",
+                    location=str(resnet_path),
                     description="标准ResNet-18，包含训练和评估代码",
                 )
             ],

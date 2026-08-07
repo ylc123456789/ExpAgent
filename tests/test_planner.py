@@ -169,6 +169,33 @@ class TestMultiToolCalls:
         assert [f["topic"] for f in state["findings"]] == ["first topic", "second topic"]
 
 
+class TestFinishSchema:
+    """Regression tests for the structured finish contract."""
+
+    def test_finish_tool_schema_constrains_nested_plan(self) -> None:
+        from experiment_designer.prompts import TOOLS
+
+        finish = next(t["function"] for t in TOOLS if t["function"]["name"] == "finish")
+        params = finish["parameters"]
+        plan_schema = params["properties"]["experiment_plan"]
+
+        method = plan_schema["properties"]["experiment_matrix"]["properties"]["methods"]["items"]
+        assert method["properties"]["type"]["enum"] == ["new_method", "baseline", "ablation"]
+        assert method["properties"]["implementation_status"]["enum"] == ["needs_code", "needs_repro", "existing"]
+        assert "rationale" in method["required"]
+
+        run_task = plan_schema["properties"]["tasks"]["properties"]["run_tasks"]["items"]
+        assert "command_goal" in run_task["required"]
+        assert "rationale" in run_task["required"]
+
+    def test_system_prompt_matches_structured_finish(self) -> None:
+        from experiment_designer.prompts import SYSTEM_PROMPT
+
+        assert "decision_json" not in SYSTEM_PROMPT
+        assert "JSON-encoded string" not in SYSTEM_PROMPT
+        assert "conclusion_status" in SYSTEM_PROMPT
+
+
 class TestPlannerReviseMock:
     """Tests for the revision workflow with mock LLM."""
 

@@ -15,6 +15,199 @@ from .context_policy import ContextPolicy
 from .models import AdvisorContext, ArtifactRef
 
 
+# ── Function Calling nested schemas ───────────────────────────────
+
+_EVIDENCE_ITEM_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "source": {"type": "string", "enum": ["artifact", "literature", "reasoning"]},
+        "description": {"type": "string", "minLength": 1},
+    },
+    "required": ["source", "description"],
+}
+
+_SUGGESTED_PLAN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "kind": {"type": "string", "enum": ["coding_task", "repro_task", "run_task", "literature_search", "ask_user", "literature_reference"]},
+        "code_availability": {"type": "string", "enum": ["public", "upon_request", "none", ""]},
+        "workspace_path": {"type": "string"},
+        "task_goal": {"type": "string"},
+        "constraints": {"type": "array", "items": {"type": "string"}},
+        "verify_commands": {"type": "array", "items": {"type": "string"}},
+        "expected_artifacts": {"type": "array", "items": {"type": "string"}},
+        "paper_url": {"type": "string"},
+        "repo_url": {"type": "string"},
+        "experiment_goal": {"type": "string"},
+        "expected_metrics": {"type": "array", "items": {"type": "string"}},
+        "command_goal": {"type": "string"},
+        "expected_runtime": {"type": "string"},
+        "requires_gpu": {"type": "boolean"},
+        "search_query": {"type": "string"},
+        "question": {"type": "string"},
+    },
+    "required": ["kind"],
+}
+
+_RECOMMENDED_ACTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "priority": {"type": "string", "enum": ["high", "medium", "low"]},
+        "type": {"type": "string", "enum": ["repro_task", "coding_task", "run_task", "literature_search", "literature_reference", "ask_user"]},
+        "rationale": {"type": "string", "minLength": 1},
+        "plan": _SUGGESTED_PLAN_SCHEMA,
+    },
+    "required": ["priority", "type", "rationale", "plan"],
+}
+
+_DATASET_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "split": {"type": "string"},
+        "rationale": {"type": "string", "minLength": 1},
+    },
+    "required": ["name", "rationale"],
+}
+
+_METHOD_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "type": {"type": "string", "enum": ["new_method", "baseline", "ablation"]},
+        "implementation_status": {"type": "string", "enum": ["needs_code", "needs_repro", "existing"]},
+        "rationale": {"type": "string", "minLength": 1},
+    },
+    "required": ["name", "type", "implementation_status", "rationale"],
+}
+
+_METRIC_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "rationale": {"type": "string", "minLength": 1},
+    },
+    "required": ["name", "rationale"],
+}
+
+_CODING_TASK_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "workspace_path": {"type": "string"},
+        "task_goal": {"type": "string", "minLength": 1},
+        "constraints": {"type": "array", "items": {"type": "string"}},
+        "verify_commands": {"type": "array", "items": {"type": "string"}},
+        "expected_artifacts": {"type": "array", "items": {"type": "string"}},
+        "rationale": {"type": "string", "minLength": 1},
+    },
+    "required": ["id", "task_goal", "rationale"],
+}
+
+_REPRO_TASK_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "paper_url": {"type": "string", "minLength": 1},
+        "repo_url": {"type": "string"},
+        "experiment_goal": {"type": "string", "minLength": 1},
+        "expected_metrics": {"type": "array", "items": {"type": "string"}},
+        "rationale": {"type": "string", "minLength": 1},
+    },
+    "required": ["id", "paper_url", "experiment_goal", "rationale"],
+}
+
+_RUN_TASK_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "command_goal": {"type": "string", "minLength": 1},
+        "expected_runtime": {"type": "string"},
+        "requires_gpu": {"type": "boolean"},
+        "rationale": {"type": "string", "minLength": 1},
+    },
+    "required": ["id", "command_goal", "rationale"],
+}
+
+_GOAL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "summary": {"type": "string", "minLength": 1},
+        "hypothesis": {"type": "string", "minLength": 1},
+        "success_criteria": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    },
+    "required": ["summary", "hypothesis", "success_criteria"],
+}
+
+_EXPERIMENT_MATRIX_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "datasets": {"type": "array", "minItems": 1, "items": _DATASET_SCHEMA},
+        "methods": {"type": "array", "minItems": 1, "items": _METHOD_SCHEMA},
+        "metrics": {"type": "array", "minItems": 1, "items": _METRIC_SCHEMA},
+    },
+    "required": ["datasets", "methods", "metrics"],
+}
+
+_TASK_BUNDLE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "coding_tasks": {"type": "array", "items": _CODING_TASK_SCHEMA},
+        "repro_tasks": {"type": "array", "items": _REPRO_TASK_SCHEMA},
+        "run_tasks": {"type": "array", "items": _RUN_TASK_SCHEMA},
+    },
+    "required": ["coding_tasks", "repro_tasks", "run_tasks"],
+}
+
+_ANALYSIS_PLAN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "comparisons": {"type": "array", "items": {"type": "string"}},
+        "plots": {"type": "array", "items": {"type": "string"}},
+        "failure_checks": {"type": "array", "items": {"type": "string"}},
+    },
+}
+
+_PLAN_RISK_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "description": {"type": "string", "minLength": 1},
+        "mitigation": {"type": "string", "minLength": 1},
+    },
+    "required": ["description", "mitigation"],
+}
+
+_EXPERIMENT_PLAN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "version": {"type": "integer"},
+        "goal": _GOAL_SCHEMA,
+        "experiment_matrix": _EXPERIMENT_MATRIX_SCHEMA,
+        "tasks": _TASK_BUNDLE_SCHEMA,
+        "analysis_plan": _ANALYSIS_PLAN_SCHEMA,
+        "risks": {"type": "array", "minItems": 1, "items": _PLAN_RISK_SCHEMA},
+    },
+    "required": ["goal", "experiment_matrix", "tasks", "analysis_plan", "risks"],
+}
+
+_RESULT_ANALYSIS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "summary": {"type": "string"},
+        "findings": {"type": "array", "items": {"type": "string"}},
+    },
+}
+
+_FAILURE_DIAGNOSIS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "failure_type": {"type": "string", "enum": ["transient", "system", "scientific", "code", "data", "budget"]},
+        "diagnosis": {"type": "string"},
+        "is_recoverable": {"type": "boolean"},
+    },
+}
+
+
 # ── Function Calling tool schemas ──────────────────────────────────
 
 
@@ -92,29 +285,27 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "finish",
-            "description": "Output your scientific decision. Fill at minimum: summary, confidence, conclusion_status, conclusion_rationale, evidence, recommended_actions, risks.",
+            "description": "Output your scientific decision as structured arguments. Fill at minimum: summary, confidence, conclusion_status, conclusion_rationale, evidence, recommended_actions, risks.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "summary": {"type": "string", "description": "One-sentence verdict"},
+                    "summary": {"type": "string", "minLength": 1, "description": "One-sentence verdict"},
                     "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
                     "conclusion_status": {"type": "string", "enum": ["supported", "not_supported", "inconclusive", "needs_more_experiments"]},
-                    "conclusion_rationale": {"type": "string", "description": "Detailed scientific reasoning"},
-                    "evidence": {"type": "array", "items": {"type": "object",
-                        "properties": {"source": {"type": "string"}, "description": {"type": "string"}}},
-                        "description": "List of evidence items"},
-                    "recommended_actions": {"type": "array", "items": {"type": "object"},
-                        "description": "Actions with: priority, type, rationale, plan (plan has: kind, task_goal, paper_url, repo_url, experiment_goal, expected_metrics)"},
-                    "experiment_plan": {"type": "object",
-                        "description": "Optional full experiment plan with: goal, experiment_matrix, tasks, analysis_plan, risks"},
-                    "result_analysis": {"type": "object",
-                        "description": "Optional result analysis with: summary, findings"},
-                    "failure_diagnosis": {"type": "object",
-                        "description": "Optional failure diagnosis with: failure_type, diagnosis, is_recoverable"},
-                    "risks": {"type": "array", "items": {"type": "string"}, "description": "Scientific risks"},
-                    "needs_user_input": {"type": "array", "items": {"type": "string"}, "description": "Questions for human"},
+                    "conclusion_rationale": {"type": "string", "minLength": 1, "description": "Detailed scientific reasoning"},
+                    "evidence": {"type": "array", "minItems": 1, "items": _EVIDENCE_ITEM_SCHEMA,
+                        "description": "Evidence supporting the conclusion"},
+                    "recommended_actions": {"type": "array", "items": _RECOMMENDED_ACTION_SCHEMA,
+                        "description": "Prioritized actions. plan.kind must match the action type; operational fields may be empty."},
+                    "experiment_plan": _EXPERIMENT_PLAN_SCHEMA,
+                    "result_analysis": _RESULT_ANALYSIS_SCHEMA,
+                    "failure_diagnosis": _FAILURE_DIAGNOSIS_SCHEMA,
+                    "risks": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1},
+                        "description": "Scientific risks"},
+                    "needs_user_input": {"type": "array", "items": {"type": "string"},
+                        "description": "Questions for human"},
                 },
-                "required": ["summary", "confidence", "conclusion_status", "conclusion_rationale", "recommended_actions", "risks"],
+                "required": ["summary", "confidence", "conclusion_status", "conclusion_rationale", "evidence", "recommended_actions", "risks"],
             },
         },
     },
@@ -160,81 +351,19 @@ Format:
 {"thinking": "why you need to read this file", "action": "read_file", "path": "/path/to/result.md"}
 
 ### finish
-Call finish with a complete JSON object in the decision_json field. The value is a JSON-encoded string containing your ScientificDecision.
+Call finish with structured arguments (as structured fields, not a string payload). Fill at minimum: summary, confidence, conclusion_status, conclusion_rationale, evidence, recommended_actions, risks.
 
-Example call:
-{"thinking": "final summary of reasoning", "action": "finish", "decision_json": "{\"summary\": \"...\", \"confidence\": \"medium\", \"conclusion\": {\"status\": \"supported\", \"rationale\": \"...\"}, ...}"}
+The finish arguments follow the function schema. Important requirements:
+- conclusion_status must be one of: supported, not_supported, inconclusive, needs_more_experiments.
+- evidence must contain at least one item with source + description.
+- risks must be a non-empty list of scientific risks.
+- Every dataset, method, metric, coding task, repro task, and run task must include a non-empty rationale explaining WHY.
+- Method type must be one of: new_method, baseline, ablation. implementation_status must be one of: needs_code, needs_repro, existing.
+- recommended_actions[].plan.kind must match the action type.
+- For repro tasks/actions, include paper_url and repo_url when public code exists; if there is no public repo, set code_availability accordingly and explain the reproduction path in rationale/experiment_goal.
+- Operational fields (workspace_path, constraints, verify_commands, compute_budget, expected_runtime) may be left empty when unknown — ResAgent fills them.
 
-## decision_json structure (MUST be valid JSON)
-
-The JSON object inside decision_json follows this schema. Include all required fields.
-
-Required fields: summary, confidence, conclusion, evidence, recommended_actions, risks
-Optional fields: experiment_plan, result_analysis, failure_diagnosis, needs_user_input
-
-{
-  "summary": "one sentence summarizing your scientific verdict",
-  "confidence": "medium",
-  "conclusion": {
-    "status": "supported",
-    "rationale": "detailed scientific reasoning"
-  },
-  "evidence": [
-    {"source": "literature", "description": "what this evidence shows"}
-  ],
-  "experiment_plan": {
-    "version": 1,
-    "goal": {
-      "summary": "one sentence",
-      "hypothesis": "specific testable claim",
-      "success_criteria": ["concrete criterion"]
-    },
-    "experiment_matrix": {
-      "datasets": [{"name": "...", "rationale": "..."}],
-      "methods": [{"name": "...", "type": "baseline", "implementation_status": "needs_repro", "rationale": "..."}],
-      "metrics": [{"name": "...", "rationale": "..."}]
-    },
-    "tasks": {
-      "coding_tasks": [{"id": "code_001", "workspace_path": "", "task_goal": "...", "rationale": "..."}],
-      "repro_tasks": [],
-      "run_tasks": []
-    },
-    "analysis_plan": {"comparisons": [""], "plots": [""], "failure_checks": [""]},
-    "risks": [{"description": "...", "mitigation": "..."}]
-  },
-  "result_analysis": {
-    "summary": "analysis text",
-    "findings": ["key finding"]
-  },
-  "failure_diagnosis": {
-    "failure_type": "scientific",
-    "diagnosis": "what went wrong",
-    "is_recoverable": true
-  },
-  "recommended_actions": [
-    {
-      "priority": "high",
-      "type": "repro_task",
-      "rationale": "WHY",
-      "plan": {
-        "kind": "repro_task",
-        "task_goal": "summary",
-        "paper_url": "...",
-        "repo_url": "...",
-        "experiment_goal": "concrete goal"
-      }
-    }
-  ],
-  "risks": ["risk description"],
-  "needs_user_input": []
-}
-
-risks:  # ALWAYS include — what scientific risks exist?
-  - "<risk description>"
-
-needs_user_input:  # OPTIONAL — questions that need human answers
-  - "<question>"
-```
+Use experiment_plan when designing or revising experiments. Use result_analysis when analyzing results. Use failure_diagnosis when diagnosing failures. If information is missing and cannot be recovered from tools, say so in conclusion_rationale, lower confidence, and add needs_user_input instead of endlessly searching.
 
 ## Your responsibility
 
