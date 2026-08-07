@@ -92,13 +92,13 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "finish",
-            "description": "Output your scientific decision as a YAML document when you have enough information.",
+            "description": "Output your scientific decision as a JSON object when you have enough information.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "decision_yaml": {"type": "string", "description": "Complete YAML document with the ScientificDecision structure"},
+                    "decision_json": {"type": "string", "description": "Complete JSON object with the ScientificDecision structure. Must be valid JSON."},
                 },
-                "required": ["decision_yaml"],
+                "required": ["decision_json"],
             },
         },
     },
@@ -144,25 +144,13 @@ Format:
 {"thinking": "why you need to read this file", "action": "read_file", "path": "/path/to/result.md"}
 
 ### finish
-Output your scientific decision as a complete YAML document. Your decision will guide the research project, so be thorough and precise.
+Output your scientific decision as a complete JSON object within the finish tool call.
 
-Return a JSON action first, then the YAML document in a fenced block:
 ```json
-{"thinking": "summary of your reasoning", "action": "finish"}
-```
-```yaml
-summary: "one sentence"
-confidence: high
-...
+{"thinking": "summary of your reasoning", "action": "finish", "decision_json": "{\"summary\": \"...\", \"confidence\": \"medium\", ...}"}
 ```
 
-IMPORTANT: The YAML goes in a SEPARATE ```yaml block — NOT as a JSON string value. This avoids escaping issues.
-
-## Output format (on finish)
-
-Your decision_yaml must be a complete YAML document following this structure:
-
-```yaml
+The decision_json field contains a JSON string with this structure:
 summary: "<one sentence summarizing your scientific verdict>"
 confidence: high  # or medium, or low
 

@@ -156,7 +156,7 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
             state.compressed.append(f"[Step {step}] Saved paper: {entry['title'][:120]}")
 
         elif name == "finish":
-            yaml_text = args.get("decision_yaml", "")
+            yaml_text = args.get("decision_json", "")
             try:
                 decision = _parse_decision(yaml_text)
             except Exception as e:
@@ -248,19 +248,21 @@ def _count_results(output: str) -> str:
     return f"{m.group(1)}p" if m else "?"
 
 
-def _parse_decision(yaml_text: str) -> ScientificDecision:
-    if not yaml_text:
+def _parse_decision(text: str) -> ScientificDecision:
+    if not text:
         raise ValueError("Empty")
-    yaml_text = yaml_text.strip()
-    for f in ("```yaml", "```"):
-        if yaml_text.startswith(f):
-            yaml_text = yaml_text[len(f):].strip()
-    if yaml_text.endswith("```"):
-        yaml_text = yaml_text[:-3].strip()
+    text = text.strip()
+    for f in ("```json", "```yaml", "```"):
+        if text.startswith(f):
+            text = text[len(f):].strip()
+    if text.endswith("```"):
+        text = text[:-3].strip()
+    # JSON first (new format), YAML fallback (backward compat)
     try:
-        data = yaml.safe_load(yaml_text)
-    except yaml.YAMLError:
-        data = json.loads(yaml_text)
+        data = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        import yaml as _yaml
+        data = _yaml.safe_load(text)
     return ScientificDecision.model_validate(data)
 
 
