@@ -171,5 +171,19 @@ def validate_decision(decision: ScientificDecision) -> ValidationResult:
     if not decision.risks:
         issues.append("risks is empty — must identify at least one scientific risk")
 
+    # Experiment plan (when present, must be complete)
+    if decision.experiment_plan is not None:
+        ep = decision.experiment_plan
+        if not ep.goal.success_criteria:
+            issues.append("experiment_plan.goal.success_criteria is empty")
+        if not ep.experiment_matrix.datasets:
+            issues.append("experiment_plan.experiment_matrix.datasets is empty")
+        if not ep.experiment_matrix.methods:
+            issues.append("experiment_plan.experiment_matrix.methods is empty")
+        if not ep.experiment_matrix.metrics:
+            issues.append("experiment_plan.experiment_matrix.metrics is empty")
+        if not ep.tasks.coding_tasks and not ep.tasks.repro_tasks and not ep.tasks.run_tasks:
+            issues.append("experiment_plan.tasks is empty — must have at least one coding, repro, or run task")
+
     status = "needs_revision" if issues else "ok"
     return ValidationResult(status=status, issues=issues)
