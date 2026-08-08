@@ -5,7 +5,7 @@
 ExpAgent = **Scientific Advisor**。不调度任何 agent。
 
 ```
-ResAgent → 读 scientific_decision.yaml → 调度 CodingAgent / ReproAgent / Runner
+ResAgent → 读 scientific_decision.json → 调度 CodingAgent / ReproAgent / Runner
 ExpAgent → situation + artifacts → agentic loop → ScientificDecision
 ```
 
@@ -59,7 +59,7 @@ recommended_actions:
 
 ```bash
 expagent advise --context "设计一个实验..." -o runs/001/
-# → runs/001/scientific_decision.yaml
+# → runs/001/scientific_decision.json
 ```
 
 ### 对 CodingAgent 的映射
@@ -83,7 +83,7 @@ expagent advise --context "设计一个实验..." -o runs/001/
 
 ```
 runs/<timestamp>/
-├── scientific_decision.yaml   # 核心输出
+├── scientific_decision.json   # 核心输出
 ├── experiment_plan.yaml       # 如果有
 ├── validation_report.md
 ├── papers/                    # 本 run 下载的论文 metadata

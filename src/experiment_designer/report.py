@@ -128,18 +128,18 @@ def write_state(
 
 
 def write_decision(decision: ScientificDecision, output_dir: Path) -> Path:
-    """Write scientific_decision.yaml to output_dir. Creates directory if needed.
+    """Write scientific_decision.json to output_dir. Creates directory if needed.
 
     Returns the path to the written file.
     """
-    from .models import ScientificDecision
+    import json as _json
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / "scientific_decision.yaml"
+    output_path = output_dir / "scientific_decision.json"
 
     data = decision.model_dump(exclude_defaults=False)
     output_path.write_text(
-        _represent_yaml(data),
+        _json.dumps(data, indent=2, ensure_ascii=False, default=str),
         encoding="utf-8",
     )
     return output_path
