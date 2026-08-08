@@ -492,7 +492,8 @@ def _run_advise(args: argparse.Namespace) -> None:
 
     print(f"Saved: {plan_path}")
     print(f"Confidence: {decision.confidence}")
-    print(f"Conclusion: {decision.conclusion.status}")
+    conclusion_status = decision.conclusion.status if decision.conclusion else "N/A"
+    print(f"Conclusion: {conclusion_status}")
     print(f"Actions: {len(decision.recommended_actions)}")
     if vr.status == "needs_revision":
         print(f"Validation issues ({len(vr.issues)}):")

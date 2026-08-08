@@ -145,7 +145,7 @@ def validate_decision(decision: ScientificDecision) -> ValidationResult:
         issues.append("evidence is empty — must cite at least one piece of evidence supporting the conclusion")
 
     # Recommended actions — can be empty but should explain why
-    if not decision.recommended_actions:
+    if not decision.recommended_actions and decision.conclusion is not None:
         if "no action" not in decision.conclusion.rationale.lower():
             issues.append("recommended_actions is empty — if no actions are needed, explain why in the conclusion")
 

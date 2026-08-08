@@ -55,8 +55,10 @@ def plan(
         repro_tasks=_extract_repro_tasks(decision.recommended_actions),
         run_tasks=_extract_run_tasks(decision.recommended_actions),
     )
+    hypothesis = (decision.conclusion.rationale[:200] if decision.conclusion and decision.conclusion.rationale
+                  else decision.summary[:200])
     fallback = ExperimentPlan(
-        goal=ResearchGoal(summary=decision.summary, hypothesis=decision.conclusion.rationale[:200]),
+        goal=ResearchGoal(summary=decision.summary, hypothesis=hypothesis),
         experiment_matrix=ExperimentMatrix(),
         tasks=tasks,
         analysis_plan=AnalysisPlan(),
