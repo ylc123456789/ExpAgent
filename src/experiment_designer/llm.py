@@ -31,6 +31,7 @@ def call_llm(
     mock: bool = False,
     trace_dir: Path | None = None,
     trace_label: str = "llm",
+    tools: list[dict] | None = None,
 ) -> dict:
     """Call LLM with tool definitions, returning parsed tool calls or message.
 
@@ -58,10 +59,11 @@ def call_llm(
     if not api_key:
         raise RuntimeError(f"{api_key_env} is not set.")
 
+    _tools = tools if tools is not None else TOOLS
     body: dict[str, Any] = {
         "model": model,
         "messages": messages,
-        "tools": TOOLS,
+        "tools": _tools,
         "tool_choice": "auto",
         "temperature": 0.3,
     }

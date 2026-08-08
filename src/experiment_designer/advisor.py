@@ -34,12 +34,15 @@ def advise(
     mock: bool = False,
     trace_dir: Path | None = None,
     run_dir: Path | None = None,
+    max_steps: int | None = None,
+    enable_paper_search: bool = True,
 ) -> tuple[ScientificDecision, list[dict]]:
     """Run the ExpAgent agentic loop and return a ScientificDecision.
 
     Args:
-        run_dir: Output directory for this run (papers, logs). If None,
-                 defaults to Path.cwd() / "runs" / <timestamp>.
+        run_dir: Output directory for this run (papers, logs).
+        max_steps: Override MAX_STEPS (default 20). For advisory/QA, use 8.
+        enable_paper_search: If False, remove search_papers/save_paper from tools.
     """
     if run_dir is None:
         from datetime import datetime, timezone
@@ -48,22 +51,30 @@ def advise(
     if trace_dir is None:
         trace_dir = run_dir / "logs"
     policy = ContextPolicy.for_model(model)
-    return _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_dir)
+    return _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_dir,
+                     max_steps, enable_paper_search)
 
 
 # ── Agentic loop ───────────────────────────────────────────────────
 
 
-def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_dir):
+def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_dir,
+              max_steps=None, enable_paper_search=True):
     """FC agentic loop: rebuild prompt each turn, keep only recent tool_pairs."""
     papers_dir = run_dir / "papers"
-    state = LoopState(situation=build_initial_prompt(ctx))
+    state = LoopState(situation=build_initial_prompt(ctx, not enable_paper_search))
     trace: list[dict] = []
-    effective_max = MAX_STEPS
+    base_max = max_steps if max_steps is not None else MAX_STEPS
+    # Filter tools based on enable_paper_search
+    from .prompts import TOOLS as _ALL_TOOLS
+    loop_tools = [t for t in _ALL_TOOLS
+                  if enable_paper_search or t["function"]["name"] not in ("search_papers", "save_paper")]
+    extra = max(0, int(MAX_EXTRA_AFTER_PROGRESS * (base_max / MAX_STEPS)))
+    effective_max = base_max
     tool_pairs: list[dict] = []   # recent tool pairs for FC continuity
 
-    for step in range(1, MAX_STEPS + MAX_EXTRA_AFTER_PROGRESS + 1):
-        if step > effective_max and effective_max >= MAX_STEPS:
+    for step in range(1, base_max + extra + 1):
+        if step > effective_max and effective_max >= base_max:
             break  # no extra progress granted, stop at base budget
 
         # Rebuild user prompt from state each turn (CodingAgent style)
@@ -87,6 +98,7 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
                 model=model, api_base=api_base, api_key_env=api_key_env,
                 system=SYSTEM_PROMPT, messages=messages,
                 mock=mock, trace_dir=trace_dir, trace_label=f"step{step}",
+                tools=loop_tools,
             )
         except Exception as e:
             trace.append({"action": "api_error", "summary": str(e)[:100]})
@@ -113,7 +125,7 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
                 trace.append({"action": "search_papers", "summary": f"q={args.get('query','')[:60]}, {_count_results(output)}"})
                 # Compress: record what was searched
                 state.compressed.append(f"[Step {step}] Searched: {args.get('query','')[:120]} → {_count_results(output)}")
-                if effective_max == MAX_STEPS:
+                if effective_max == base_max:
                     effective_max += MAX_EXTRA_AFTER_PROGRESS
 
             elif name == "read_file":
@@ -122,7 +134,7 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
                 state.file_cache[path or f"file_{step}_{call_index}"] = output
                 trace.append({"action": "read_file", "summary": f"path={path[:80]}"})
                 state.compressed.append(f"[Step {step}] Read: {path[:120]} ({len(output)} chars)")
-                if effective_max == MAX_STEPS:
+                if effective_max == base_max:
                     effective_max += MAX_EXTRA_AFTER_PROGRESS
 
             elif name == "note_finding":

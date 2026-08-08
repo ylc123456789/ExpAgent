@@ -1,0 +1,16 @@
+name: expagent
+version: "1.0"
+role: scientific_advisor
+description_for_router: |
+  科学顾问。擅长：科学原理问答、研究 idea 可行性讨论、实验设计、
+  实验结果分析、失败归因。只读咨询，不执行代码、不跑实验。
+  适用：用户问原理/方法/文献，或讨论模糊想法。
+  不适用：需要实际改代码或跑实验的请求。
+capabilities:
+  - scientific_advisory
+  - idea_discussion
+  - experiment_design
+  - result_analysis
+side_effects: none
+input_contract: advise(AdvisorContext) -> ScientificDecision
+status: available

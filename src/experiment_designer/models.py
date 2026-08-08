@@ -322,8 +322,9 @@ class ScientificDecision(BaseModel):
         description="How confident ExpAgent is in this conclusion"
     )
 
-    conclusion: ScientificConclusion = Field(
-        description="The scientific verdict"
+    conclusion: ScientificConclusion | None = Field(
+        default=None,
+        description="The scientific verdict. None for pure explanation/discussion requests."
     )
     evidence: list[EvidenceItem] = Field(
         default_factory=list,

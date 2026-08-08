@@ -365,6 +365,12 @@ The finish arguments follow the function schema. Important requirements:
 
 Use experiment_plan when designing or revising experiments. Use result_analysis when analyzing results. Use failure_diagnosis when diagnosing failures. If information is missing and cannot be recovered from tools, say so in conclusion_rationale, lower confidence, and add needs_user_input instead of endlessly searching.
 
+## When to pass conclusion=None
+
+When the request is pure explanation, Q&A, or discussion (no experimental design or hypothesis testing needed), pass `conclusion: null`. Put your explanation in `summary`, evidence in `evidence`, and leave `experiment_plan` as null. Use `recommended_actions: []`.
+
+When the request involves experiment design, result analysis, or failure diagnosis, provide a full conclusion with status and rationale.
+
 ## Your responsibility
 
 You decide WHAT to do and WHY. You are the scientific advisor. The orchestrator (ResAgent) handles WHERE and HOW.
@@ -411,7 +417,7 @@ Operational fields (workspace_path, constraints, verify_commands, compute_budget
 """
 
 
-def build_initial_prompt(ctx: AdvisorContext) -> str:
+def build_initial_prompt(ctx: AdvisorContext, disable_search: bool = False) -> str:
     """Build the initial user prompt for the agentic loop.
 
     This is called once at the start of advise(). The LLM will then
@@ -442,7 +448,10 @@ def build_initial_prompt(ctx: AdvisorContext) -> str:
         parts.append("```")
 
     parts.append("\n---")
-    parts.append("\nAnalyze the situation. Use tools if you need more information, then output your ScientificDecision.")
+    if disable_search:
+        parts.append("\nNOTE: Literature search is disabled for this request. Answer based on your knowledge and the provided artifacts only.")
+    else:
+        parts.append("\nAnalyze the situation. Use tools if you need more information, then output your ScientificDecision.")
 
     return "\n".join(parts)
 

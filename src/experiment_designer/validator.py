@@ -130,11 +130,15 @@ def validate_decision(decision: ScientificDecision) -> ValidationResult:
     if not decision.summary.strip():
         issues.append("summary is empty")
 
-    # Conclusion
-    if not decision.conclusion.rationale.strip():
-        issues.append("conclusion.rationale is empty — must explain the scientific reasoning")
-    if not decision.conclusion.status:
-        issues.append("conclusion.status is empty")
+    # Conclusion: optional for pure explanation/discussion requests
+    if decision.conclusion is not None:
+        if not decision.conclusion.rationale.strip():
+            issues.append("conclusion.rationale is empty — must explain the scientific reasoning")
+        if not decision.conclusion.status:
+            issues.append("conclusion.status is empty")
+    else:
+        if len(decision.summary.strip()) < 50:
+            issues.append("summary too short for conclusion=None — must be at least 50 chars")
 
     # Evidence
     if not decision.evidence:
