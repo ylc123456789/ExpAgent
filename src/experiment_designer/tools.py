@@ -101,13 +101,13 @@ def search_papers(
 def save_paper(
     paper_id: str,
     title: str,
+    output_dir: str | Path,
     first_author: str = "",
     year: int | None = None,
     abstract: str = "",
     url: str = "",
     code_url: str = "",
     one_liner: str = "",
-    output_dir: str | Path = "papers",
 ) -> str:
     """Save a paper's metadata to disk for later on-demand reading.
 

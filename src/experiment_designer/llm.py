@@ -216,7 +216,7 @@ def _make_mock_design_decision() -> dict:
                 "metrics": [{"name": "top1_accuracy", "rationale": "Primary metric"}],
             },
             "tasks": {
-                "coding_tasks": [{"id": "code_001", "workspace_path": "/home/cyl/my_project", "task_goal": "Implement L2-norm attention", "rationale": "Core method"}],
+                "coding_tasks": [{"id": "code_001", "workspace_path": "./", "task_goal": "Implement L2-norm attention", "rationale": "Core method"}],
                 "repro_tasks": [],
                 "run_tasks": [{"id": "run_001", "command_goal": "Run CIFAR-10 bounded experiment", "rationale": "Core comparison"}],
             },
@@ -224,7 +224,7 @@ def _make_mock_design_decision() -> dict:
             "risks": [{"description": "May not generalize", "mitigation": "Follow-up on ImageNet"}],
         },
         "recommended_actions": [
-            {"priority": "high", "type": "coding_task", "rationale": "Implement proposed method", "plan": {"kind": "coding_task", "workspace_path": "/home/cyl/my_project", "task_goal": "Implement L2-norm attention"}},
+            {"priority": "high", "type": "coding_task", "rationale": "Implement proposed method", "plan": {"kind": "coding_task", "workspace_path": "./", "task_goal": "Implement L2-norm attention"}},
         ],
         "risks": ["CIFAR-10 may not generalize"],
         "needs_user_input": [],
