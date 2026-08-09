@@ -40,7 +40,10 @@ def advise(
     """Run the ExpAgent agentic loop and return a ScientificDecision.
 
     Args:
-        run_dir: Output directory for this run (papers, logs).
+        run_dir: ExpAgent-owned directory. Caller must pass a unique path
+                 per invocation. ExpAgent may create any files/subdirs here.
+                 Callers should treat everything except state.json as
+                 implementation detail.
         max_steps: Override MAX_STEPS (default 20). For advisory/QA, use 8.
         enable_paper_search: If False, remove search_papers/save_paper from tools.
     """
