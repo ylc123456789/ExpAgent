@@ -284,6 +284,7 @@ class TestRevision:
             result,
             "加一个ViT-B/16作为额外的baseline，验证方法对Transformer架构是否也有效",
             api_key_env="DEEPSEEK_API_KEY",
+            run_dir=_runs_dir("revise"),
         )
 
         n_after = len(revised.experiment_matrix.methods)
@@ -306,6 +307,7 @@ class TestRevision:
             result,
             "增加一个ablation实验：去掉L2归一化只保留缩放，看归一化这一步是否真的必要",
             api_key_env="DEEPSEEK_API_KEY",
+            run_dir=_runs_dir("revise"),
         )
 
         # The ablation should appear somewhere — methods, tasks, or rationale
@@ -326,6 +328,7 @@ class TestRevision:
             result,
             "把success_criteria里的精度阈值从2%改成3%",
             api_key_env="DEEPSEEK_API_KEY",
+            run_dir=_runs_dir("revise"),
         )
 
         # Core structure should be preserved

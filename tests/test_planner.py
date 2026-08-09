@@ -25,7 +25,7 @@ class TestPlannerMock:
             target_task="image classification",
             compute_budget=ComputeBudget(gpu="RTX 4090", max_runtime="2 hours", max_trials=5),
         )
-        result, diags = plan(inp, mock=True)
+        result, diags = plan(inp, mock=True, run_dir=_runs_dir("mock"))
         assert result is not None
         assert result.version == 1
         assert result.goal.hypothesis
@@ -40,7 +40,7 @@ class TestPlannerMock:
             research_idea="Test idea",
             target_task="classification",
         )
-        result, diags = plan(inp, mock=True)
+        result, diags = plan(inp, mock=True, run_dir=_runs_dir("mock"))
         vr = validate(result)
         assert vr.status == "ok", f"Mock plan failed validation: {vr.issues}"
 
@@ -50,7 +50,7 @@ class TestPlannerMock:
             research_idea="Test idea",
             target_task="classification",
         )
-        result, diags = plan(inp, mock=True)
+        result, diags = plan(inp, mock=True, run_dir=_runs_dir("mock"))
         for t in result.tasks.coding_tasks:
             assert t.rationale, f"Task {t.id} missing rationale"
         for t in result.tasks.repro_tasks:
@@ -64,7 +64,7 @@ class TestPlannerMock:
             research_idea="Test idea",
             target_task="classification",
         )
-        result, diags = plan(inp, mock=True)
+        result, diags = plan(inp, mock=True, run_dir=_runs_dir("mock"))
         for m in result.experiment_matrix.methods:
             assert m.rationale, f"Method {m.name} missing rationale"
 
@@ -74,7 +74,7 @@ class TestPlannerMock:
             research_idea="Test idea",
             target_task="classification",
         )
-        result, diags = plan(inp, mock=True)
+        result, diags = plan(inp, mock=True, run_dir=_runs_dir("mock"))
         types = {m.type for m in result.experiment_matrix.methods}
         assert "baseline" in types, "No baseline in mock plan"
         assert "new_method" in types, "No new_method in mock plan"
@@ -211,10 +211,10 @@ class TestPlannerReviseMock:
             research_idea="Test idea",
             target_task="classification",
         )
-        current, _ = plan(inp, mock=True)
+        current, _ = plan(inp, mock=True, run_dir=_runs_dir("mock"))
 
         # Revise it
-        revised, diags = revise(current, "Add ViT baseline", mock=True)
+        revised, diags = revise(current, "Add ViT baseline", mock=True, run_dir=_runs_dir("mock_revise"))
         assert revised is not None
         assert revised.version == 1
 
@@ -266,7 +266,7 @@ class TestPlannerTraceDir:
         if trace_dir.exists():
             import shutil
             shutil.rmtree(trace_dir)
-        result, diags = plan(inp, mock=True, trace_dir=trace_dir)
+        result, diags = plan(inp, mock=True, trace_dir=trace_dir, run_dir=_runs_dir("mock_trace"))
         files = list(trace_dir.glob("*.prompt.txt"))
         assert len(files) > 0, "No prompt trace files found"
         resp_files = list(trace_dir.glob("*.response.txt"))
