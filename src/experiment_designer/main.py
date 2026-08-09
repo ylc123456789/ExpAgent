@@ -572,19 +572,21 @@ def _read_idea(spec: str) -> str:
 
 
 def _default_output_dir() -> Path:
-    """Return the default output directory (project-local runs/<timestamp>)."""
+    """Return the default output directory.
+
+    Priority: RESAGENT_WORKSPACE env > project runs/ > cwd runs/.
+    """
+    import os as _os
     from datetime import datetime, timezone
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    # Find the project root (where pyproject.toml lives)
+    root = _os.environ.get("RESAGENT_WORKSPACE")
+    if root:
+        return Path(root) / stamp
     project_root = Path(__file__).resolve().parent.parent.parent
-    # If installed in editable mode, __file__ points to src/experiment_designer/
-    # so parent.parent.parent is the project root.
-    # As a fallback, use cwd
-    candidate = project_root / "runs" / stamp
-    if not project_root.joinpath("pyproject.toml").exists():
-        candidate = Path.cwd() / "runs" / stamp
-    return candidate
+    if project_root.joinpath("pyproject.toml").exists():
+        return project_root / "runs" / stamp
+    return Path.cwd() / "runs" / stamp
 
 
 if __name__ == "__main__":

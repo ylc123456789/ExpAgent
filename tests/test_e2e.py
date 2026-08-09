@@ -534,8 +534,19 @@ class TestV2Models:
 
 
 def _runs_dir(*subdirs: str) -> Path:
-    """Return runs/tests/<subdirs>/<timestamp>/ for isolated test artifacts."""
+    """Return a timestamped directory for test artifacts.
+
+    Uses pytest tmp_path by default (cleaned after test). Set
+    EXPAGENT_KEEP_TEST_TRACES=1 to persist traces in the project.
+    """
+    import os as _os
+    import tempfile as _tempfile
     from datetime import datetime, timezone
+
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    project_root = Path(__file__).resolve().parent.parent
-    return project_root / "runs" / "tests" / Path(*subdirs) / stamp
+
+    if _os.environ.get("EXPAGENT_KEEP_TEST_TRACES") == "1":
+        project_root = Path(__file__).resolve().parent.parent
+        return project_root / "runs" / "tests" / Path(*subdirs) / stamp
+
+    return Path(_tempfile.mkdtemp(prefix="expagent_test_")) / Path(*subdirs) / stamp

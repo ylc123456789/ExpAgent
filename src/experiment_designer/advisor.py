@@ -48,9 +48,11 @@ def advise(
         enable_paper_search: If False, remove search_papers/save_paper from tools.
     """
     if run_dir is None:
+        import os as _os
         from datetime import datetime, timezone
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-        run_dir = Path.cwd() / "runs" / stamp
+        root = _os.environ.get("RESAGENT_WORKSPACE")
+        run_dir = (Path(root) if root else Path.cwd() / "runs") / stamp
     if trace_dir is None:
         trace_dir = run_dir / "logs"
     policy = ContextPolicy.for_model(model)
