@@ -476,7 +476,9 @@ def _run_advise(args: argparse.Namespace) -> None:
             data = _yaml.safe_load(plan_path.read_text(encoding="utf-8"))
             existing_plan = ExperimentPlan.model_validate(data)
 
-    ctx = AdvisorContext(situation=situation, artifacts=artifacts, existing_plan=existing_plan)
+    ctx = AdvisorContext(situation=situation, artifacts=artifacts,
+                         existing_plan=existing_plan,
+                         thread_dir=getattr(args, "thread_dir", "") or "")
     output_dir = args.output or _default_output_dir()
     mock = getattr(args, "mock_llm", False)
 
@@ -520,6 +522,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     advise_parser.add_argument("--api-base", type=str, default=None)
     advise_parser.add_argument("--api-key-env", type=str, default=None)
     advise_parser.add_argument("--mock-llm", action="store_true", default=False)
+    advise_parser.add_argument("--thread-dir", type=str, default=None,
+                                help="Thread directory for continuous advisory sessions")
     advise_parser.add_argument("--config", "-c", type=str, default=None)
 
     # ---- Default / REPL mode (no subcommand) ----
