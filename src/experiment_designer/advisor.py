@@ -226,7 +226,8 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
                     write_state(run_dir, ctx.situation, model, trace,
                                 decision.model_dump(), state.paper_index, state.findings)
                     write_session_card(run_dir, status="completed",
-                                       summary=decision.summary)
+                                       summary=decision.summary,
+                                       parent=ctx.parent_run)
                     _append_thread(ctx.thread_dir, decision.summary)
                     return decision, trace
                 issues_text = "\n".join(f"- {i}" for i in vr.issues)
@@ -255,7 +256,8 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
     # Loop exhausted
     from .models import ScientificConclusion
     write_state(run_dir, ctx.situation, model, trace, None, state.paper_index, state.findings)
-    write_session_card(run_dir, status="failed", summary="Step budget exhausted")
+    write_session_card(run_dir, status="failed", summary="Step budget exhausted",
+                       parent=ctx.parent_run)
     return ScientificDecision(
         summary="Step budget exhausted.",
         confidence="low",

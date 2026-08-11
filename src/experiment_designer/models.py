@@ -215,6 +215,10 @@ class AdvisorContext(BaseModel):
         description="Optional thread directory. If set, previous advisory summaries "
                     "are injected into the situation and new summaries appended."
     )
+    parent_run: dict | None = Field(
+        default=None,
+        description="When orchestrated by ResAgent: {'module':'resagent','run_id':'res-...','task_id':'task_...'}."
+    )
 
 
 class ScientificConclusion(BaseModel):
