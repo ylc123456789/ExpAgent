@@ -361,7 +361,7 @@ The finish arguments follow the function schema. Important requirements:
 - Method type must be one of: new_method, baseline, ablation. implementation_status must be one of: needs_code, needs_repro, existing.
 - recommended_actions[].plan.kind must match the action type.
 - For repro tasks/actions, include paper_url and repo_url when public code exists; if there is no public repo, set code_availability accordingly and explain the reproduction path in rationale/experiment_goal.
-- Operational fields (workspace_path, constraints, verify_commands, compute_budget, expected_runtime) may be left empty when unknown — ResAgent fills them.
+- Operational fields (workspace_path, constraints, verify_commands, expected_runtime) may be left empty when unknown — ResAgent fills them.
 
 Use experiment_plan when designing or revising experiments. Use result_analysis when analyzing results. Use failure_diagnosis when diagnosing failures. If information is missing and cannot be recovered from tools, say so in conclusion_rationale, lower confidence, and add needs_user_input instead of endlessly searching.
 
@@ -381,7 +381,7 @@ For each recommended action, fill these scientific fields:
 - experiment_goal: what experiment to run (for repro/run tasks)
 - expected_metrics: what metrics to evaluate
 
-Operational fields (workspace_path, constraints, verify_commands, compute_budget, expected_runtime) are NOT your concern — ResAgent fills them based on the execution environment. Leave them empty.
+Operational fields (workspace_path, constraints, verify_commands, expected_runtime) are NOT your concern — ResAgent fills them based on the execution environment. Leave them empty.
 
 ## Rules
 

@@ -25,9 +25,11 @@ decision, trace = advise(ctx, model="deepseek-chat")
 
 ## 3. 输出格式: ScientificDecision
 
-每个 `recommended_action.plan` 是**自包含**的完整方案，下游可直接使用：
+每个 `recommended_action.plan` 是**自包含**的完整方案，下游可直接使用。
 
-```yaml
+`conclusion` 可选（纯问答/讨论类请求时为 None）。
+
+```json
 recommended_actions:
   - priority: high
     type: repro_task
@@ -79,15 +81,17 @@ expagent advise --context "设计一个实验..." -o runs/001/
 | `repo_url` | `repo_url` |
 | `experiment_goal` | `experiment_goal` |
 
-## 6. 产物结构 (对齐 ReproAgent)
+## 6. 产物结构
 
 ```
 runs/<timestamp>/
-├── scientific_decision.json   # 核心输出
+├── session.yaml               # 会话索引卡 (§3 跨模块契约)
+├── state.json                 # 完整运行记录 (每步 action + observation)
+├── scientific_decision.json   # 核心输出 (JSON)
 ├── experiment_plan.yaml       # 如果有
 ├── validation_report.md
-├── papers/                    # 本 run 下载的论文 metadata
-└── logs/                      # trace 文件
+├── papers/                    # 本 run 下载的论文 (metadata + arXiv 全文)
+└── logs/                      # LLM prompt/response trace
 ```
 
 ## 7. 上下文管理
@@ -107,6 +111,6 @@ runs/<timestamp>/
 ## 9. 当前测试状态
 
 ```
-单元测试: 44/44 passed
+单元测试: 51/51 passed
 E2E (DeepSeek API): 22/22 passed
 ```

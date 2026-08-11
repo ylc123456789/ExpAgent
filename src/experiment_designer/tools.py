@@ -1,7 +1,8 @@
 """Tools for the ExpAgent agentic loop.
 
 - search_papers: directed search across Semantic Scholar (primary), DBLP, arXiv
-- read_file: read artifact files passed by ResAgent
+- read_file: read artifact files (head/middle/tail sections)
+- save_paper: persist paper metadata + arXiv full-text download
 """
 
 from __future__ import annotations
@@ -206,14 +207,15 @@ def _download_arxiv_full_text(arxiv_id: str, output_dir: Path) -> str:
 
 
 def read_file(path: str, max_chars: int = 16_000) -> str:
-    """Read a local artifact file (experiment result, log, etc.).
+    """Read a local artifact file with head/middle/tail sections.
 
     Args:
         path: Absolute or relative path to the file.
-        max_chars: Maximum characters to read (tail of file if exceeded).
+        max_chars: Maximum characters to return. Files longer than this
+                   show beginning, middle, and ending sections.
 
     Returns:
-        File content as string, truncated from the end if too long.
+        File content with position markers when truncated.
     """
     p = Path(path).expanduser().resolve()
     if not p.exists():

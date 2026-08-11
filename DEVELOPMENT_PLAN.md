@@ -54,7 +54,7 @@ AdvisorContext(
 
 ## 4. 输出
 
-核心输出是 `ScientificDecision`（`scientific_decision.yaml`）：
+核心输出是 `ScientificDecision`（`scientific_decision.json`）：
 
 ```yaml
 summary: "一句话总结"
@@ -147,7 +147,7 @@ LLM 保存论文后可通过 read_file 按需读取全文。
 
 ```
 runs/<timestamp>/
-├── scientific_decision.yaml
+├── scientific_decision.json
 ├── experiment_plan.yaml
 ├── validation_report.md
 ├── papers/              # 本 run 下载的论文

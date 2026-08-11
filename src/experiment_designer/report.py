@@ -1,4 +1,5 @@
-"""Write experiment plans to disk."""
+"""Write output artifacts: experiment_plan.yaml, scientific_decision.json,
+state.json, session.yaml, validation_report.md, and utility list_run_files()."""
 
 from __future__ import annotations
 
