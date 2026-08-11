@@ -16,7 +16,7 @@ from .context_policy import ContextPolicy
 from .llm import call_llm
 from .models import AdvisorContext, ScientificDecision
 from .prompts import SYSTEM_PROMPT, build_initial_prompt, build_turn_prompt
-from .report import write_state
+from .report import write_session_card, write_state
 from .tools import read_file, save_paper, search_papers
 from .validator import validate_decision
 
@@ -67,7 +67,28 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
               max_steps=None, enable_paper_search=True):
     """FC agentic loop: rebuild prompt each turn, keep only recent tool_pairs."""
     papers_dir = run_dir / "papers"
-    state = LoopState(situation=build_initial_prompt(ctx, not enable_paper_search))
+
+    # Thread injection: if thread_dir set, read prior summaries into situation
+    situation = ctx.situation
+    if ctx.thread_dir:
+        thread_path = Path(ctx.thread_dir) / "thread.yaml"
+        if thread_path.exists():
+            import yaml as _yaml
+            try:
+                prior = _yaml.safe_load(thread_path.read_text(encoding="utf-8"))
+                entries = prior.get("entries", [])[-5:] if isinstance(prior, dict) else []
+                if entries:
+                    lines = ["## Prior Advisory Summaries (most recent last)"]
+                    for i, e in enumerate(entries, 1):
+                        lines.append(f"[{i}] {e.get('summary', '')[:300]}")
+                    situation = "\n\n".join(lines) + "\n\n" + ctx.situation
+            except Exception:
+                pass
+
+    # Build initial prompt from the (possibly thread-augmented) situation
+    tmp_ctx = AdvisorContext(situation=situation, artifacts=ctx.artifacts,
+                             existing_plan=ctx.existing_plan, thread_dir=ctx.thread_dir)
+    state = LoopState(situation=build_initial_prompt(tmp_ctx, not enable_paper_search))
     trace: list[dict] = []
     base_max = max_steps if max_steps is not None else MAX_STEPS
     # Filter tools based on enable_paper_search
@@ -204,6 +225,9 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
                 if vr.status == "ok":
                     write_state(run_dir, ctx.situation, model, trace,
                                 decision.model_dump(), state.paper_index, state.findings)
+                    write_session_card(run_dir, status="completed",
+                                       summary=decision.summary)
+                    _append_thread(ctx.thread_dir, decision.summary)
                     return decision, trace
                 issues_text = "\n".join(f"- {i}" for i in vr.issues)
                 trace.append({"action": "validate", "summary": f"{len(vr.issues)} issues"})
@@ -231,6 +255,7 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
     # Loop exhausted
     from .models import ScientificConclusion
     write_state(run_dir, ctx.situation, model, trace, None, state.paper_index, state.findings)
+    write_session_card(run_dir, status="failed", summary="Step budget exhausted")
     return ScientificDecision(
         summary="Step budget exhausted.",
         confidence="low",
@@ -288,6 +313,30 @@ def _execute_search(args: dict) -> str:
 def _count_results(output: str) -> str:
     m = re.search(r"Found (\d+) papers?", output)
     return f"{m.group(1)}p" if m else "?"
+
+
+def _append_thread(thread_dir: str, summary: str) -> None:
+    """Append an advisory summary to the thread file."""
+    if not thread_dir:
+        return
+    import yaml as _yaml
+    from datetime import datetime, timezone
+
+    tp = Path(thread_dir) / "thread.yaml"
+    tp.parent.mkdir(parents=True, exist_ok=True)
+    entries: list[dict] = []
+    if tp.exists():
+        try:
+            data = _yaml.safe_load(tp.read_text(encoding="utf-8"))
+            entries = data.get("entries", []) if isinstance(data, dict) else []
+        except Exception:
+            pass
+    entries.append({
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "summary": summary[:500],
+    })
+    tp.write_text(_yaml.dump({"entries": entries[-20:]}, allow_unicode=True, sort_keys=False),
+                  encoding="utf-8")
 
 
 def _slugify(title: str) -> str:

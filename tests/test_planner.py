@@ -273,6 +273,82 @@ class TestPlannerTraceDir:
         assert len(resp_files) > 0, "No response trace files found"
 
 
+class TestSessionCard:
+    """Tests for E1: session.yaml index card."""
+
+    def test_session_card_written_on_success(self) -> None:
+        """plan() mock run should produce session.yaml in run_dir."""
+        run_dir = _runs_dir("session_success")
+        run_dir.mkdir(parents=True, exist_ok=True)
+        inp = DesignInput(
+            research_idea="Test idea",
+            target_task="classification",
+        )
+        result, diags = plan(inp, mock=True, run_dir=run_dir)
+
+        card_path = run_dir / "session.yaml"
+        assert card_path.exists(), "session.yaml missing"
+
+        import yaml
+        card = yaml.safe_load(card_path.read_text(encoding="utf-8"))
+        assert card["schema_version"] == 1
+        assert card["module"] == "expagent"
+        assert card["kind"] == "advisory_session"
+        assert card["status"] == "completed"
+        assert card["session_id"].startswith("exp-")
+        assert card["project_path"]  # at minimum has the run dir path
+
+    def test_session_card_written_on_failure(self) -> None:
+        """Even on step exhaustion, session.yaml should be written."""
+        run_dir = _runs_dir("session_fail")
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+        # max_steps=0 → loop never enters → exhausted immediately
+        from experiment_designer.advisor import advise
+        from experiment_designer.models import AdvisorContext
+
+        ctx = AdvisorContext(situation="TASK: Some task.")
+        decision, trace = advise(ctx, mock=True, run_dir=run_dir, max_steps=0)
+
+        card_path = run_dir / "session.yaml"
+        assert card_path.exists(), "session.yaml should exist even on failure"
+
+        import yaml
+        card = yaml.safe_load(card_path.read_text(encoding="utf-8"))
+        assert card["status"] == "failed"
+
+
+class TestAdvisoryThread:
+    """Tests for E2: advisory thread support."""
+
+    def test_thread_injects_prior_summaries(self) -> None:
+        """When thread_dir has prior entries, they appear in the prompt."""
+        run_dir = _runs_dir("thread1")
+        thread_dir = _runs_dir("thread_store")
+        thread_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write a prior thread entry
+        import yaml
+        thread_file = thread_dir / "thread.yaml"
+        thread_file.write_text(yaml.dump({
+            "entries": [{"ts": "2026-08-10T00:00:00", "summary": "Prior finding: SE-block is the standard baseline."}]
+        }), encoding="utf-8")
+
+        from experiment_designer.advisor import advise
+        from experiment_designer.models import AdvisorContext
+
+        ctx = AdvisorContext(
+            situation="New question: what other baselines should we consider?",
+            thread_dir=str(thread_dir),
+        )
+        decision, trace = advise(ctx, mock=True, run_dir=run_dir, max_steps=3)
+
+        # Verify thread was appended
+        updated = yaml.safe_load(thread_file.read_text(encoding="utf-8"))
+        assert len(updated["entries"]) == 2, "Should have original + new entry"
+        assert decision.summary in [e["summary"] for e in updated["entries"]]
+
+
 def _runs_dir(*subdirs: str) -> Path:
     """Return a timestamped directory for test artifacts.
 

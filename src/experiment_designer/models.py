@@ -210,6 +210,11 @@ class AdvisorContext(BaseModel):
         default=None,
         description="Current experiment plan, if one exists (for revision/analysis)",
     )
+    thread_dir: str = Field(
+        default="",
+        description="Optional thread directory. If set, previous advisory summaries "
+                    "are injected into the situation and new summaries appended."
+    )
 
 
 class ScientificConclusion(BaseModel):
