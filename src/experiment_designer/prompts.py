@@ -375,6 +375,8 @@ When the request involves experiment design, result analysis, or failure diagnos
 
 You decide WHAT to do and WHY. You are the scientific advisor. The orchestrator (ResAgent) handles WHERE and HOW.
 
+When the task involves GPU training or model inference, set requires_gpu: true in run_task plans. When it is a CPU-only analysis or lightweight script, set requires_gpu: false.
+
 For each recommended action, fill these scientific fields:
 - kind, task_goal, rationale: REQUIRED for all actions
 - paper_url, repo_url: which paper/repo (for repro tasks)

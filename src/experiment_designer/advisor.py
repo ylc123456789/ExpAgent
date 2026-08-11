@@ -16,7 +16,7 @@ from .context_policy import ContextPolicy
 from .llm import call_llm
 from .models import AdvisorContext, ScientificDecision
 from .prompts import SYSTEM_PROMPT, build_initial_prompt, build_turn_prompt
-from .report import write_session_card, write_state
+from .report import write_decision, write_session_card, write_state
 from .tools import read_file, save_paper, search_papers
 from .validator import validate_decision
 
@@ -225,6 +225,7 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
                 if vr.status == "ok":
                     write_state(run_dir, ctx.situation, model, trace,
                                 decision.model_dump(), state.paper_index, state.findings)
+                    write_decision(decision, run_dir)
                     write_session_card(run_dir, status="completed",
                                        summary=decision.summary,
                                        parent=ctx.parent_run)
