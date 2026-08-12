@@ -1,6 +1,6 @@
 """ExpAgent — LLM-first scientific advisor for ML research."""
 
-from .context_policy import ContextPolicy
+from .context.policy import ContextPolicy
 from .models import (
     AdvisorContext,
     AnalysisPlan,

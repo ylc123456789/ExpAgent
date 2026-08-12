@@ -7,8 +7,10 @@ import readline
 import sys
 from pathlib import Path
 
-from .advisor import advise
+from .agent import advise
 from .config import resolve_llm_config
+from .controller.planner import plan, revise
+from .controller.validator import validate, validate_decision
 from .models import (
     AdvisorContext,
     ArtifactRef,
@@ -17,9 +19,7 @@ from .models import (
     ExistingAssets,
     ExperimentPlan,
 )
-from .planner import plan, revise
 from .report import write_decision, write_plan, write_validation_report
-from .validator import validate, validate_decision
 
 
 def main(argv: list[str] | None = None) -> None:

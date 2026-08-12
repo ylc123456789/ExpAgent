@@ -94,23 +94,54 @@ runs/<timestamp>/
 └── logs/                      # LLM prompt/response trace
 ```
 
-## 7. 上下文管理
+## 7. 目录结构
 
-- `context.py` — LoopState (结构化状态)
-- `context_policy.py` — ContextPolicy.for_model() (3档窗口自适应)
-- `prompts.py` — SYSTEM_PROMPT + TOOLS + prompt builders
+```
+experiment_designer/
+├── __init__.py          # 稳定公共 API (根导出)
+├── main.py              # CLI 参数解析 + REPL + 依赖装配
+├── agent.py             # 顶层公共运行 API: advise()
+├── models.py            # Pydantic 输入/输出/持久化模型
+├── config.py            # LLM 配置解析 (CLI > env > config file)
+├── controller/          # Agentic loop + 动作分派 + 校验
+│   ├── loop.py          #   主循环 _run_loop + 工具分派
+│   ├── planner.py       #   plan()/revise() 设计流程包装
+│   └── validator.py     #   validate()/validate_decision() 确定性校验
+├── prompts/             # Prompt 与工具 schema (字节级冻结)
+│   ├── system.py        #   SYSTEM_PROMPT
+│   ├── schemas.py       #   TOOLS + 嵌套 JSON schema
+│   └── rendering.py     #   build_*_prompt 状态渲染
+├── context/             # 循环状态与上下文预算
+│   ├── builder.py       #   LoopState
+│   └── policy.py        #   ContextPolicy.for_model()
+├── tools/               # 外部副作用工具
+│   ├── files.py         #   read_file
+│   └── papers.py        #   search_papers / save_paper
+├── llm.py               # OpenAI 兼容 API 客户端 (3 次重试)
+├── session.py           # session.yaml + state.json 追踪
+└── report.py            # experiment_plan.yaml + scientific_decision.json
+```
+
+兼容性：`advisor.py` / `planner.py` / `validator.py` 是薄转发模块，保留旧导入路径
+(ResAgent 通过 `from experiment_designer.advisor import advise` 调用)。
+
+## 8. 上下文管理
+
+- `context/builder.py` — LoopState (结构化状态)
+- `context/policy.py` — ContextPolicy.for_model() (3档窗口自适应)
+- `prompts/` — SYSTEM_PROMPT + TOOLS + prompt builders
 - 每轮从 state 重建 user prompt (CodingAgent 风格)
 - 保留最近 4 对 tool_pairs 供 FC 连续性
 
-## 8. API 重试
+## 9. API 重试
 
 对齐 CodingAgent/ReproAgent：
 - API 层: 3 次重试 (网络/5xx)，退避 2s/4s/8s
 - Loop 层: 捕获失败作为 api_error 步骤，loop 继续
 
-## 9. 当前测试状态
+## 10. 当前测试状态
 
 ```
-单元测试: 51/51 passed
+单元测试: 61 passed, 22 deselected (e2e marker)
 E2E (DeepSeek API): 22/22 passed
 ```

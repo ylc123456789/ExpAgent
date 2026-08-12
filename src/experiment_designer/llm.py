@@ -3,7 +3,7 @@
 Matches ReproAgent's llm.py and CodingAgent's llm.py style:
 - No openai package, no chat history.
 - API layer: 3 attempts (2 retries) on transient errors (network, 5xx).
-- Loop layer: advisor.py catches failures and injects as api_error steps.
+- Loop layer: controller/loop.py catches failures and injects as api_error steps.
 """
 
 from __future__ import annotations

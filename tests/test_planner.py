@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-import experiment_designer.advisor as advisor_mod
+import experiment_designer.controller.loop as loop_mod
 import experiment_designer.llm as llm_mod
 from experiment_designer.advisor import advise
 from experiment_designer.models import AdvisorContext, ComputeBudget, DesignInput
@@ -155,7 +155,7 @@ class TestMultiToolCalls:
             },
         ])
 
-        monkeypatch.setattr(advisor_mod, "call_llm", lambda **kwargs: next(responses))
+        monkeypatch.setattr(loop_mod, "call_llm", lambda **kwargs: next(responses))
 
         decision, trace = advise(
             AdvisorContext(situation="multi tool regression"),

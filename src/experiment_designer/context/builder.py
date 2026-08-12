@@ -2,7 +2,7 @@
 
 Style-aligned with CodingAgent's context.py:
 - LoopState holds all mutable loop state
-- State is rebuilt into a fresh prompt each turn (prompt logic in prompts.py)
+- State is rebuilt into a fresh prompt each turn (prompt logic in prompts/rendering.py)
 """
 
 from __future__ import annotations
