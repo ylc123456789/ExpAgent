@@ -196,6 +196,194 @@ class TestFinishSchema:
         assert "conclusion_status" in SYSTEM_PROMPT
 
 
+class TestActionDependencyMetadata:
+    """Tests for optional action dependency metadata (action_id, depends_on, project_ref)."""
+
+    def test_legacy_decision_without_new_fields_validates(self) -> None:
+        """Decisions without action_id/depends_on/project_ref must still validate."""
+        from experiment_designer.models import (
+            ScientificDecision, ScientificConclusion, EvidenceItem,
+            RecommendedAction, SuggestedPlan,
+        )
+        from experiment_designer.validator import validate_decision
+
+        sd = ScientificDecision(
+            summary="Legacy decision without dependency metadata fields",
+            confidence="medium",
+            conclusion=ScientificConclusion(status="needs_more_experiments", rationale="Need more data."),
+            evidence=[EvidenceItem(source="reasoning", description="Test evidence.")],
+            recommended_actions=[
+                RecommendedAction(
+                    priority="high", type="coding_task",
+                    rationale="Implement proposed method",
+                    plan=SuggestedPlan(kind="coding_task", task_goal="Write code"),
+                ),
+            ],
+            risks=["Sample size too small"],
+        )
+        vr = validate_decision(sd)
+        assert vr.status == "ok", f"Legacy decision should validate: {vr.issues}"
+
+    def test_code_task_plus_dependent_run_task_roundtrip(self) -> None:
+        """Code task + dependent run task with dependency metadata should serialize and validate."""
+        import yaml
+        from experiment_designer.models import (
+            ScientificDecision, ScientificConclusion, EvidenceItem,
+            RecommendedAction, SuggestedPlan,
+        )
+        from experiment_designer.validator import validate_decision
+
+        sd = ScientificDecision(
+            summary="Decision with dependency chain",
+            confidence="medium",
+            conclusion=ScientificConclusion(status="needs_more_experiments", rationale="Test rationale."),
+            evidence=[EvidenceItem(source="reasoning", description="Test evidence.")],
+            recommended_actions=[
+                RecommendedAction(
+                    priority="high", type="coding_task",
+                    rationale="Patch training loop",
+                    action_id="patch_training_loop",
+                    depends_on=[],
+                    project_ref="current_project",
+                    plan=SuggestedPlan(kind="coding_task", task_goal="Add loss logging"),
+                ),
+                RecommendedAction(
+                    priority="high", type="run_task",
+                    rationale="Run after code patch",
+                    action_id="run_with_patch",
+                    depends_on=["patch_training_loop"],
+                    project_ref="current_project",
+                    plan=SuggestedPlan(kind="run_task", command_goal="Run validation", requires_gpu=True),
+                ),
+            ],
+            risks=["Dependency chain untested"],
+        )
+
+        # Validate
+        vr = validate_decision(sd)
+        assert vr.status == "ok", f"Dependency decision should validate: {vr.issues}"
+
+        # Roundtrip through YAML
+        dumped = yaml.dump(sd.model_dump(), allow_unicode=True, sort_keys=False)
+        loaded = yaml.safe_load(dumped)
+        revalidated = ScientificDecision.model_validate(loaded)
+        assert revalidated.summary == sd.summary
+        assert len(revalidated.recommended_actions) == 2
+        assert revalidated.recommended_actions[0].action_id == "patch_training_loop"
+        assert revalidated.recommended_actions[1].depends_on == ["patch_training_loop"]
+        assert revalidated.recommended_actions[1].project_ref == "current_project"
+
+    def test_duplicate_action_id_rejected(self) -> None:
+        """Two actions with the same action_id should fail validation."""
+        from experiment_designer.models import (
+            ScientificDecision, ScientificConclusion, EvidenceItem,
+            RecommendedAction, SuggestedPlan,
+        )
+        from experiment_designer.validator import validate_decision
+
+        sd = ScientificDecision(
+            summary="Duplicate action_id test",
+            confidence="medium",
+            conclusion=ScientificConclusion(status="needs_more_experiments", rationale="Test."),
+            evidence=[EvidenceItem(source="reasoning", description="Test.")],
+            recommended_actions=[
+                RecommendedAction(
+                    priority="high", type="coding_task",
+                    rationale="First",
+                    action_id="same_id",
+                    plan=SuggestedPlan(kind="coding_task", task_goal="Task 1"),
+                ),
+                RecommendedAction(
+                    priority="medium", type="run_task",
+                    rationale="Second",
+                    action_id="same_id",
+                    plan=SuggestedPlan(kind="run_task", command_goal="Task 2"),
+                ),
+            ],
+            risks=["Test risk"],
+        )
+        vr = validate_decision(sd)
+        assert vr.status == "needs_revision", "Duplicate action_id should be rejected"
+        assert any("same_id" in i for i in vr.issues), f"Expected issue about 'same_id': {vr.issues}"
+
+    def test_unknown_dependency_rejected(self) -> None:
+        """depends_on referencing a non-existent action_id should fail validation."""
+        from experiment_designer.models import (
+            ScientificDecision, ScientificConclusion, EvidenceItem,
+            RecommendedAction, SuggestedPlan,
+        )
+        from experiment_designer.validator import validate_decision
+
+        sd = ScientificDecision(
+            summary="Unknown dependency test",
+            confidence="medium",
+            conclusion=ScientificConclusion(status="needs_more_experiments", rationale="Test."),
+            evidence=[EvidenceItem(source="reasoning", description="Test.")],
+            recommended_actions=[
+                RecommendedAction(
+                    priority="high", type="run_task",
+                    rationale="Depends on something that doesn't exist",
+                    depends_on=["nonexistent_action"],
+                    plan=SuggestedPlan(kind="run_task", command_goal="Run experiment"),
+                ),
+            ],
+            risks=["Test risk"],
+        )
+        vr = validate_decision(sd)
+        assert vr.status == "needs_revision", "Unknown dependency should be rejected"
+        assert any("nonexistent_action" in i for i in vr.issues), (
+            f"Expected issue about 'nonexistent_action': {vr.issues}"
+        )
+
+    def test_independent_actions_need_no_dependency_metadata(self) -> None:
+        """Independent actions with empty action_id/depends_on should validate fine."""
+        from experiment_designer.models import (
+            ScientificDecision, ScientificConclusion, EvidenceItem,
+            RecommendedAction, SuggestedPlan,
+        )
+        from experiment_designer.validator import validate_decision
+
+        sd = ScientificDecision(
+            summary="Independent actions no metadata",
+            confidence="medium",
+            conclusion=ScientificConclusion(status="needs_more_experiments", rationale="Test."),
+            evidence=[EvidenceItem(source="reasoning", description="Test.")],
+            recommended_actions=[
+                RecommendedAction(
+                    priority="high", type="coding_task",
+                    rationale="Independent code task",
+                    plan=SuggestedPlan(kind="coding_task", task_goal="Write code"),
+                ),
+                RecommendedAction(
+                    priority="medium", type="literature_search",
+                    rationale="Independent search",
+                    plan=SuggestedPlan(kind="literature_search", search_query="attention mechanisms"),
+                ),
+            ],
+            risks=["Test risk"],
+        )
+        vr = validate_decision(sd)
+        assert vr.status == "ok", f"Independent actions should validate: {vr.issues}"
+
+    def test_mock_output_has_dependency_metadata(self) -> None:
+        """Mock LLM output should include action_id/depends_on/project_ref in recommended actions."""
+        from experiment_designer.llm import _make_mock_design_decision
+
+        decision = _make_mock_design_decision()
+        actions = decision["recommended_actions"]
+        assert len(actions) >= 2, "Mock should have at least 2 recommended actions"
+
+        # First action should have action_id
+        assert actions[0].get("action_id"), "First action should have action_id"
+        assert actions[0].get("project_ref") == "current_project"
+
+        # Second action should depend on first
+        assert actions[1].get("depends_on"), "Second action should have depends_on"
+        assert actions[0]["action_id"] in actions[1]["depends_on"], (
+            f"Second action depends_on should reference first action_id"
+        )
+
+
 class TestPlannerReviseMock:
     """Tests for the revision workflow with mock LLM."""
 

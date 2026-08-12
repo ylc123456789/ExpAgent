@@ -280,6 +280,10 @@ class RecommendedAction(BaseModel):
 
     ResAgent reads these, decides which to execute, and dispatches
     to the appropriate downstream agent with the embedded plan.
+
+    Optional dependency metadata (action_id, depends_on, project_ref)
+    allows expressing ordering constraints between actions in the same
+    decision — e.g., a code change followed by a run that depends on it.
     """
 
     priority: Literal["high", "medium", "low"] = Field(
@@ -293,6 +297,21 @@ class RecommendedAction(BaseModel):
     )
     plan: SuggestedPlan = Field(
         description="Complete executable plan. Downstream agents use this directly."
+    )
+    action_id: str = Field(
+        default="",
+        description="Unique id within this decision, e.g. 'patch_training_loop'. "
+                    "Required only when another action depends on this one."
+    )
+    depends_on: list[str] = Field(
+        default_factory=list,
+        description="IDs of actions in this same decision that must complete "
+                    "before this one. References must be valid action_ids."
+    )
+    project_ref: str = Field(
+        default="",
+        description="Logical project/workspace identifier shared across "
+                    "dependent actions, e.g. 'current_project'."
     )
 
 

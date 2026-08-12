@@ -117,6 +117,41 @@ def validate(plan: ExperimentPlan) -> ValidationResult:
     return ValidationResult(status=status, issues=issues)
 
 
+def _validate_action_dependencies(decision: ScientificDecision) -> list[str]:
+    """Validate action_id uniqueness and depends_on references within a decision.
+
+    Rules:
+    - action_id values (when non-empty) must be unique across all actions.
+    - Every id in depends_on must reference a valid action_id in the same decision.
+    - Independent actions (no action_id, no depends_on) are always valid.
+    """
+    issues: list[str] = []
+    actions = decision.recommended_actions
+    if not actions:
+        return issues
+
+    # Collect all non-empty action_ids
+    all_ids = [a.action_id for a in actions if a.action_id.strip()]
+
+    # Duplicate check
+    seen: set[str] = set()
+    for aid in all_ids:
+        if aid in seen:
+            issues.append(f"Duplicate action_id: '{aid}' — each action_id must be unique within a decision")
+        seen.add(aid)
+
+    # Unknown reference check
+    for i, action in enumerate(actions):
+        for dep_id in action.depends_on:
+            if dep_id not in all_ids:
+                issues.append(
+                    f"recommended_actions[{i}] depends_on unknown action_id '{dep_id}' — "
+                    f"must reference an action_id defined in the same decision"
+                )
+
+    return issues
+
+
 def validate_decision(decision: ScientificDecision) -> ValidationResult:
     """Validate a ScientificDecision for structural completeness.
 
@@ -174,6 +209,9 @@ def validate_decision(decision: ScientificDecision) -> ValidationResult:
     # Risks
     if not decision.risks:
         issues.append("risks is empty — must identify at least one scientific risk")
+
+    # Action dependency metadata
+    issues.extend(_validate_action_dependencies(decision))
 
     # Experiment plan (when present, must be complete)
     if decision.experiment_plan is not None:

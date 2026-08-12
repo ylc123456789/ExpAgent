@@ -56,6 +56,9 @@ _RECOMMENDED_ACTION_SCHEMA = {
         "type": {"type": "string", "enum": ["repro_task", "coding_task", "run_task", "literature_search", "literature_reference", "ask_user"]},
         "rationale": {"type": "string", "minLength": 1},
         "plan": _SUGGESTED_PLAN_SCHEMA,
+        "action_id": {"type": "string", "description": "Unique id within this decision. Set when another action depends on this one."},
+        "depends_on": {"type": "array", "items": {"type": "string"}, "description": "IDs of actions in this same decision that must complete before this one."},
+        "project_ref": {"type": "string", "description": "Logical project identifier shared across dependent actions."},
     },
     "required": ["priority", "type", "rationale", "plan"],
 }
@@ -399,6 +402,15 @@ Operational fields (workspace_path, constraints, verify_commands, expected_runti
 - Actions should be prioritized: what's most scientifically important right now?
 - Don't recommend more than 5 actions — prioritize.
 - If the scientific direction looks unpromising, say so (status: not_supported) rather than recommending endless experiments.
+
+### Action dependencies
+When one action's output feeds into another (e.g., code change followed by a run that tests it):
+- Give each action a unique `action_id` (e.g., "patch_training_loop", "run_with_patch").
+- In the dependent action, set `depends_on` to reference the prerequisite action_ids.
+- Use `project_ref` to indicate shared project context (e.g., "current_project").
+- Independent actions should leave `action_id` and `depends_on` empty/absent.
+- `depends_on` references must be valid `action_id` values from the same decision.
+- ExpAgent is a scientific advisor — do NOT embed machine-specific paths or ResAgent directory layouts in these fields.
 
 ### Tool usage
 - Think BEFORE searching — what specific information do you need?
