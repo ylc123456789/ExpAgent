@@ -99,7 +99,9 @@ runs/<timestamp>/
 ```
 experiment_designer/
 ├── __init__.py          # 稳定公共 API (根导出)
-├── main.py              # CLI 参数解析 + REPL + 依赖装配
+├── main.py              # CLI 参数解析 + 依赖装配 (非交互 + advise)
+├── repl.py              # 交互式 REPL (会话状态 + slash 命令 + 自然语言)
+├── presentation.py      # 终端渲染原语
 ├── agent.py             # 顶层公共运行 API: advise()
 ├── models.py            # Pydantic 输入/输出/持久化模型
 ├── config.py            # LLM 配置解析 (CLI > env > config file)
