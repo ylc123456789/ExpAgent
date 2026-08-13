@@ -121,15 +121,23 @@ def _validate_action_dependencies(decision: ScientificDecision) -> list[str]:
     """Validate action_id uniqueness and depends_on references within a decision.
 
     Rules:
-    - action_id values (when non-empty) must be unique across all actions.
+    - Every action must have a non-empty action_id.
+    - action_id values must be unique across all actions.
     - Every id in depends_on must reference a valid action_id in the same decision.
     - A dependency must point to an EARLIER action, keeping the graph acyclic.
-    - Independent actions (no action_id, no depends_on) are always valid.
     """
     issues: list[str] = []
     actions = decision.recommended_actions
     if not actions:
         return issues
+
+    # Non-empty action_id check
+    for i, a in enumerate(actions):
+        if not a.action_id.strip():
+            issues.append(
+                f"recommended_actions[{i}] has an empty action_id — every action "
+                f"must have a unique, non-empty action_id"
+            )
 
     # Collect all non-empty action_ids
     all_ids = [a.action_id for a in actions if a.action_id.strip()]

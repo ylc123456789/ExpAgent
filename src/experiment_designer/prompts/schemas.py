@@ -24,7 +24,6 @@ _SUGGESTED_PLAN_SCHEMA = {
     "properties": {
         "kind": {"type": "string", "enum": ["coding_task", "repro_task", "run_task", "literature_search", "ask_user", "literature_reference"]},
         "code_availability": {"type": "string", "enum": ["public", "upon_request", "none", ""]},
-        "workspace_path": {"type": "string"},
         "task_goal": {"type": "string"},
         "constraints": {"type": "array", "items": {"type": "string"}},
         "verify_commands": {"type": "array", "items": {"type": "string"}},

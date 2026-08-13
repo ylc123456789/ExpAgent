@@ -111,8 +111,23 @@ def test_expagent_has_no_physical_execution_fields() -> None:
     """ExpAgent models must not expose operator/CodingAgent physical fields."""
     for model in (ScientificDecision, RecommendedAction, SuggestedPlan):
         fields = set(model.model_fields)
-        for physical in ("copy_from", "external_repo_path", "env_name"):
+        for physical in ("workspace_path", "copy_from", "external_repo_path", "env_name"):
             assert physical not in fields, f"{model.__name__} must not have '{physical}'"
+
+
+def test_empty_action_id_rejected() -> None:
+    """Every recommended action must have a non-empty action_id."""
+    decision = _make_decision([
+        RecommendedAction(
+            priority="high",
+            type="run_task",
+            rationale="Missing action_id",
+            plan=SuggestedPlan(kind="run_task", command_goal="Run"),
+        ),
+    ])
+    vr = validate_decision(decision)
+    assert vr.status == "needs_revision"
+    assert any("empty action_id" in i for i in vr.issues), vr.issues
 
 
 def test_finish_schema_has_workspace_intent() -> None:

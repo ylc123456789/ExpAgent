@@ -229,7 +229,7 @@ def _make_mock_design_decision() -> dict:
              "action_id": "patch_training_loop",
              "depends_on": [],
              "project_ref": "current_project",
-             "plan": {"kind": "coding_task", "workspace_path": "./", "task_goal": "Implement L2-norm attention"}},
+             "plan": {"kind": "coding_task", "task_goal": "Implement L2-norm attention"}},
             {"priority": "high", "type": "run_task",
              "rationale": "Validate after code patch",
              "action_id": "run_with_patch",

@@ -254,7 +254,6 @@ class SuggestedPlan(BaseModel):
         description="Whether code is available: public (has repo), upon_request (email author), none (no code). Only relevant for repro tasks."
     )
     # For coding tasks
-    workspace_path: str = ""
     task_goal: str = ""
     constraints: list[str] = Field(default_factory=list)
     verify_commands: list[str] = Field(default_factory=list)

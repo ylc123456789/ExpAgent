@@ -148,6 +148,7 @@ class TestMultiToolCalls:
                     "evidence": [{"source": "reasoning", "description": "Both parallel calls executed."}],
                     "recommended_actions": [{"priority": "high", "type": "coding_task",
                         "rationale": "Keep test executable",
+                        "action_id": "noop_regression",
                         "plan": {"kind": "coding_task", "task_goal": "No-op regression task"}}],
                     "risks": ["Regression test only"],
                     "needs_user_input": [],
@@ -199,8 +200,8 @@ class TestFinishSchema:
 class TestActionDependencyMetadata:
     """Tests for optional action dependency metadata (action_id, depends_on, project_ref)."""
 
-    def test_legacy_decision_without_new_fields_validates(self) -> None:
-        """Decisions without action_id/depends_on/project_ref must still validate."""
+    def test_minimal_action_with_only_action_id_validates(self) -> None:
+        """Only action_id is required; depends_on/project_ref/workspace_intent are optional."""
         from experiment_designer.models import (
             ScientificDecision, ScientificConclusion, EvidenceItem,
             RecommendedAction, SuggestedPlan,
@@ -208,7 +209,7 @@ class TestActionDependencyMetadata:
         from experiment_designer.validator import validate_decision
 
         sd = ScientificDecision(
-            summary="Legacy decision without dependency metadata fields",
+            summary="Minimal action with only action_id",
             confidence="medium",
             conclusion=ScientificConclusion(status="needs_more_experiments", rationale="Need more data."),
             evidence=[EvidenceItem(source="reasoning", description="Test evidence.")],
@@ -216,13 +217,14 @@ class TestActionDependencyMetadata:
                 RecommendedAction(
                     priority="high", type="coding_task",
                     rationale="Implement proposed method",
+                    action_id="code_001",
                     plan=SuggestedPlan(kind="coding_task", task_goal="Write code"),
                 ),
             ],
             risks=["Sample size too small"],
         )
         vr = validate_decision(sd)
-        assert vr.status == "ok", f"Legacy decision should validate: {vr.issues}"
+        assert vr.status == "ok", f"Minimal action should validate: {vr.issues}"
 
     def test_code_task_plus_dependent_run_task_roundtrip(self) -> None:
         """Code task + dependent run task with dependency metadata should serialize and validate."""
@@ -335,8 +337,8 @@ class TestActionDependencyMetadata:
             f"Expected issue about 'nonexistent_action': {vr.issues}"
         )
 
-    def test_independent_actions_need_no_dependency_metadata(self) -> None:
-        """Independent actions with empty action_id/depends_on should validate fine."""
+    def test_independent_actions_need_no_depends_on(self) -> None:
+        """Independent actions need a non-empty action_id but no depends_on."""
         from experiment_designer.models import (
             ScientificDecision, ScientificConclusion, EvidenceItem,
             RecommendedAction, SuggestedPlan,
@@ -344,7 +346,7 @@ class TestActionDependencyMetadata:
         from experiment_designer.validator import validate_decision
 
         sd = ScientificDecision(
-            summary="Independent actions no metadata",
+            summary="Independent actions no dependency metadata",
             confidence="medium",
             conclusion=ScientificConclusion(status="needs_more_experiments", rationale="Test."),
             evidence=[EvidenceItem(source="reasoning", description="Test.")],
@@ -352,11 +354,13 @@ class TestActionDependencyMetadata:
                 RecommendedAction(
                     priority="high", type="coding_task",
                     rationale="Independent code task",
+                    action_id="code_independent",
                     plan=SuggestedPlan(kind="coding_task", task_goal="Write code"),
                 ),
                 RecommendedAction(
                     priority="medium", type="literature_search",
                     rationale="Independent search",
+                    action_id="search_independent",
                     plan=SuggestedPlan(kind="literature_search", search_query="attention mechanisms"),
                 ),
             ],
