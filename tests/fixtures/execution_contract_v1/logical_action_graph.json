@@ -1,0 +1,42 @@
+{
+  "summary": "Patch the training loop to log loss, then run a bounded validation on the same workspace",
+  "confidence": "medium",
+  "conclusion": {
+    "status": "needs_more_experiments",
+    "rationale": "The proposed change needs a code patch before any measurement can be taken."
+  },
+  "evidence": [
+    {"source": "reasoning", "description": "Loss is not currently logged, so it cannot be compared yet."}
+  ],
+  "recommended_actions": [
+    {
+      "priority": "high",
+      "type": "coding_task",
+      "rationale": "Add loss logging to the training loop.",
+      "action_id": "patch_training_loop",
+      "depends_on": [],
+      "project_ref": "my_research",
+      "workspace_intent": "",
+      "plan": {
+        "kind": "coding_task",
+        "task_goal": "Add loss logging to the training loop"
+      }
+    },
+    {
+      "priority": "high",
+      "type": "run_task",
+      "rationale": "Run a bounded validation after the code patch.",
+      "action_id": "run_with_patch",
+      "depends_on": ["patch_training_loop"],
+      "project_ref": "my_research",
+      "workspace_intent": "shared",
+      "plan": {
+        "kind": "run_task",
+        "command_goal": "Run a bounded validation experiment",
+        "requires_gpu": true
+      }
+    }
+  ],
+  "risks": ["The bounded run may not generalize"],
+  "needs_user_input": []
+}

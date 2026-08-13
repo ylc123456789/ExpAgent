@@ -281,9 +281,10 @@ class RecommendedAction(BaseModel):
     ResAgent reads these, decides which to execute, and dispatches
     to the appropriate downstream agent with the embedded plan.
 
-    Optional dependency metadata (action_id, depends_on, project_ref)
-    allows expressing ordering constraints between actions in the same
-    decision — e.g., a code change followed by a run that depends on it.
+    Optional dependency metadata (action_id, depends_on, project_ref,
+    workspace_intent) forms the logical action graph. ExpAgent expresses
+    scientific intent and ordering; ResAgent resolves physical paths at
+    dispatch time.
     """
 
     priority: Literal["high", "medium", "low"] = Field(
@@ -312,6 +313,13 @@ class RecommendedAction(BaseModel):
         default="",
         description="Logical project/workspace identifier shared across "
                     "dependent actions, e.g. 'current_project'."
+    )
+    workspace_intent: Literal["shared", "isolated", ""] = Field(
+        default="",
+        description="Workspace sharing intent for run/repro tasks: 'shared' "
+                    "(operate on the project referenced by project_ref) or "
+                    "'isolated' (private clone/copy). Empty when undecided. "
+                    "ResAgent resolves this to a physical workspace at dispatch."
     )
 
 

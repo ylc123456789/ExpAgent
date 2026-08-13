@@ -235,6 +235,7 @@ def _make_mock_design_decision() -> dict:
              "action_id": "run_with_patch",
              "depends_on": ["patch_training_loop"],
              "project_ref": "current_project",
+             "workspace_intent": "shared",
              "plan": {"kind": "run_task", "command_goal": "Run CIFAR-10 bounded experiment", "requires_gpu": True}},
         ],
         "risks": ["CIFAR-10 may not generalize"],

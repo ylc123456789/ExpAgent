@@ -91,11 +91,13 @@ Operational fields (workspace_path, constraints, verify_commands, expected_runti
 ### Action dependencies
 When one action's output feeds into another (e.g., code change followed by a run that tests it):
 - Give each action a unique `action_id` (e.g., "patch_training_loop", "run_with_patch").
-- In the dependent action, set `depends_on` to reference the prerequisite action_ids.
-- Use `project_ref` to indicate shared project context (e.g., "current_project").
-- Independent actions should leave `action_id` and `depends_on` empty/absent.
-- `depends_on` references must be valid `action_id` values from the same decision.
-- ExpAgent is a scientific advisor — do NOT embed machine-specific paths or ResAgent directory layouts in these fields.
+- In the dependent action, set `depends_on` to reference the prerequisite action_ids. A dependency must point to an EARLIER action in the list (keeping the graph acyclic) and reference a valid `action_id` from the same decision.
+- Use `project_ref` to mark the shared logical project (e.g., "my_research") across actions touching the same repository.
+- For run/repro tasks in a "modify then run" flow, set `workspace_intent` to "shared" when the task should run on the same repository as a prior action, or "isolated" for a private copy. Leave empty when undecided.
+- Independent actions should leave `action_id`, `depends_on`, and `workspace_intent` empty/absent.
+
+### Logical vs physical
+ExpAgent emits scientific intent and a logical action graph only — never physical execution fields such as `workspace_path`, `external_repo_path`, `copy_from`, `env_name`, or absolute paths. ResAgent resolves these at dispatch time.
 
 ### Tool usage
 - Think BEFORE searching — what specific information do you need?

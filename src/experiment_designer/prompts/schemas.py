@@ -52,6 +52,7 @@ _RECOMMENDED_ACTION_SCHEMA = {
         "action_id": {"type": "string", "description": "Unique id within this decision. Set when another action depends on this one."},
         "depends_on": {"type": "array", "items": {"type": "string"}, "description": "IDs of actions in this same decision that must complete before this one."},
         "project_ref": {"type": "string", "description": "Logical project identifier shared across dependent actions."},
+        "workspace_intent": {"type": "string", "enum": ["shared", "isolated", ""], "description": "Workspace sharing intent for run/repro tasks. shared = operate on project_ref in place; isolated = private clone/copy; empty = undecided."},
     },
     "required": ["priority", "type", "rationale", "plan"],
 }

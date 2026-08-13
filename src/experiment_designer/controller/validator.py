@@ -123,6 +123,7 @@ def _validate_action_dependencies(decision: ScientificDecision) -> list[str]:
     Rules:
     - action_id values (when non-empty) must be unique across all actions.
     - Every id in depends_on must reference a valid action_id in the same decision.
+    - A dependency must point to an EARLIER action, keeping the graph acyclic.
     - Independent actions (no action_id, no depends_on) are always valid.
     """
     issues: list[str] = []
@@ -140,13 +141,24 @@ def _validate_action_dependencies(decision: ScientificDecision) -> list[str]:
             issues.append(f"Duplicate action_id: '{aid}' — each action_id must be unique within a decision")
         seen.add(aid)
 
-    # Unknown reference check
+    # Position of each action_id (first occurrence) for the ordering check
+    id_position: dict[str, int] = {}
+    for i, a in enumerate(actions):
+        if a.action_id.strip() and a.action_id not in id_position:
+            id_position[a.action_id] = i
+
+    # Reference + ordering (acyclic) check
     for i, action in enumerate(actions):
         for dep_id in action.depends_on:
-            if dep_id not in all_ids:
+            if dep_id not in id_position:
                 issues.append(
                     f"recommended_actions[{i}] depends_on unknown action_id '{dep_id}' — "
                     f"must reference an action_id defined in the same decision"
+                )
+            elif id_position[dep_id] >= i:
+                issues.append(
+                    f"recommended_actions[{i}] depends_on '{dep_id}' must reference an "
+                    f"EARLIER action (found at index {id_position[dep_id]}) to keep the graph acyclic"
                 )
 
     return issues

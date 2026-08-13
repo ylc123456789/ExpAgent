@@ -29,6 +29,16 @@ decision, trace = advise(ctx, model="deepseek-chat")
 
 `conclusion` 可选（纯问答/讨论类请求时为 None）。
 
+每个 `recommended_action` 还携带**逻辑动作图**字段（EXECUTION_CONTRACT_V1）：
+
+- `action_id` — 决策内唯一标识
+- `depends_on` — 依赖的前序 `action_id`（保持无环，引用更早的动作）
+- `project_ref` — 共享同一仓库的逻辑项目标识
+- `workspace_intent` — `shared`（在同一 repo 上跑）/ `isolated`（私有副本）/ 空
+
+ExpAgent 只表达科学意图与逻辑引用，**不输出物理路径**（`workspace_path`/
+`external_repo_path`/`copy_from`/`env_name`/绝对路径），由 ResAgent 派发时解析注入。
+
 ```json
 recommended_actions:
   - priority: high
