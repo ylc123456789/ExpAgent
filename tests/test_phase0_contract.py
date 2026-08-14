@@ -45,7 +45,7 @@ def test_cli_help_contract() -> None:
 
 def test_prompt_contracts() -> None:
     rendered = build_initial_prompt(AdvisorContext(situation="phase0 situation"))
-    assert _sha256(SYSTEM_PROMPT) == "25f7de10a0acc9bd437af261bf6e5e2b5c753c7f2997df1bfaa845ce2a073a32"
+    assert _sha256(SYSTEM_PROMPT) == "c4143d24c6e63be591aeadc2e8010d7f028f2db38ba9dca6c70ddec9bc870b59"
     assert _sha256(rendered) == "84128b7d5013e99f22f18348ffe53722f13d0660f93e1c22ad8bdf627f551cbc"
 
 
@@ -60,7 +60,7 @@ def test_cross_module_model_field_contracts() -> None:
     ]
     assert list(RecommendedAction.model_fields) == [
         "priority", "type", "rationale", "plan", "action_id", "depends_on",
-        "project_ref", "workspace_intent",
+        "project_ref", "workspace_intent", "required",
     ]
     assert list(SuggestedPlan.model_fields) == [
         "kind", "code_availability", "task_goal", "constraints",

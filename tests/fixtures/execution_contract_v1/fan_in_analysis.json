@@ -1,0 +1,48 @@
+{
+  "summary": "Run baseline and proposed, then interpret the comparison",
+  "confidence": "medium",
+  "conclusion": {
+    "status": "needs_more_experiments",
+    "rationale": "Both experiments must complete before their results can be interpreted."
+  },
+  "evidence": [
+    {"source": "reasoning", "description": "A two-run comparison needs a final scientific interpretation."}
+  ],
+  "recommended_actions": [
+    {
+      "priority": "high",
+      "type": "run_task",
+      "rationale": "Measure the baseline.",
+      "action_id": "run_baseline",
+      "depends_on": [],
+      "project_ref": "my_research",
+      "workspace_intent": "shared",
+      "required": true,
+      "plan": {"kind": "run_task", "command_goal": "Run the baseline experiment", "requires_gpu": true}
+    },
+    {
+      "priority": "high",
+      "type": "run_task",
+      "rationale": "Measure the proposed method.",
+      "action_id": "run_proposed",
+      "depends_on": [],
+      "project_ref": "my_research",
+      "workspace_intent": "shared",
+      "required": true,
+      "plan": {"kind": "run_task", "command_goal": "Run the proposed experiment", "requires_gpu": true}
+    },
+    {
+      "priority": "high",
+      "type": "result_analysis",
+      "rationale": "Interpret the two measurements scientifically.",
+      "action_id": "analyze_comparison",
+      "depends_on": ["run_baseline", "run_proposed"],
+      "project_ref": "my_research",
+      "workspace_intent": "",
+      "required": true,
+      "plan": {"kind": "result_analysis", "task_goal": "Compare baseline vs proposed accuracy"}
+    }
+  ],
+  "risks": ["The bounded runs may not generalize"],
+  "needs_user_input": []
+}

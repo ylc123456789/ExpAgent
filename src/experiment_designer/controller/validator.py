@@ -225,6 +225,9 @@ def validate_decision(decision: ScientificDecision) -> ValidationResult:
         elif action.type == "literature_search":
             if not plan.search_query.strip():
                 issues.append(f"recommended_actions[{i}] (literature_search): plan.search_query is empty")
+        elif action.type == "result_analysis":
+            if not plan.task_goal.strip():
+                issues.append(f"recommended_actions[{i}] (result_analysis): plan.task_goal is empty")
 
     # Risks
     if not decision.risks:

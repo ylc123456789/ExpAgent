@@ -22,7 +22,7 @@ _EVIDENCE_ITEM_SCHEMA = {
 _SUGGESTED_PLAN_SCHEMA = {
     "type": "object",
     "properties": {
-        "kind": {"type": "string", "enum": ["coding_task", "repro_task", "run_task", "literature_search", "ask_user", "literature_reference"]},
+        "kind": {"type": "string", "enum": ["coding_task", "repro_task", "run_task", "literature_search", "ask_user", "literature_reference", "result_analysis"]},
         "code_availability": {"type": "string", "enum": ["public", "upon_request", "none", ""]},
         "task_goal": {"type": "string"},
         "constraints": {"type": "array", "items": {"type": "string"}},
@@ -45,13 +45,14 @@ _RECOMMENDED_ACTION_SCHEMA = {
     "type": "object",
     "properties": {
         "priority": {"type": "string", "enum": ["high", "medium", "low"]},
-        "type": {"type": "string", "enum": ["repro_task", "coding_task", "run_task", "literature_search", "literature_reference", "ask_user"]},
+        "type": {"type": "string", "enum": ["repro_task", "coding_task", "run_task", "literature_search", "literature_reference", "ask_user", "result_analysis"]},
         "rationale": {"type": "string", "minLength": 1},
         "plan": _SUGGESTED_PLAN_SCHEMA,
-        "action_id": {"type": "string", "description": "Unique id within this decision. Set when another action depends on this one."},
+        "action_id": {"type": "string", "description": "Unique, non-empty id within this decision."},
         "depends_on": {"type": "array", "items": {"type": "string"}, "description": "IDs of actions in this same decision that must complete before this one."},
         "project_ref": {"type": "string", "description": "Logical project identifier shared across dependent actions."},
         "workspace_intent": {"type": "string", "enum": ["shared", "isolated", ""], "description": "Workspace sharing intent for run/repro tasks. shared = operate on project_ref in place; isolated = private clone/copy; empty = undecided."},
+        "required": {"type": "boolean", "description": "Whether ResAgent must complete this action before finishing. Default true; false only for genuinely optional follow-ups."},
     },
     "required": ["priority", "type", "rationale", "plan"],
 }

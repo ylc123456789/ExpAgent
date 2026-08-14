@@ -87,6 +87,7 @@ Operational fields (workspace_path, constraints, verify_commands, expected_runti
 - Actions should be prioritized: what's most scientifically important right now?
 - Don't recommend more than 5 actions — prioritize.
 - If the scientific direction looks unpromising, say so (status: not_supported) rather than recommending endless experiments.
+- Set `required=false` only for genuinely optional follow-ups. Scientific conclusions, requested experiments, and final result analysis must stay `required=true` (the default).
 
 ### Action dependencies
 Every recommended action MUST have a unique, non-empty `action_id` (e.g., "patch_training_loop", "run_with_patch"), even if it has no dependencies.
@@ -96,6 +97,13 @@ Every recommended action MUST have a unique, non-empty `action_id` (e.g., "patch
 
 ### Logical vs physical
 ExpAgent emits scientific intent and a logical action graph only — never physical execution fields such as `workspace_path`, `external_repo_path`, `copy_from`, `env_name`, or absolute paths. ResAgent resolves these at dispatch time.
+
+### result_analysis actions
+When a decision must interpret experiment results (e.g., compare two runs), emit a `result_analysis` action rather than a `run_task`. It is an ExpAgent-internal task — ResAgent routes it back to ExpAgent, never to ReproAgent.
+- Both `type` and `plan.kind` are `result_analysis`.
+- `depends_on` must list every experiment action whose evidence should be analyzed.
+- Set `task_goal` to the analysis question (e.g., "compare accuracy of baseline vs proposed").
+- Include no physical paths; ResAgent materializes the dependency artifacts before dispatch.
 
 ### Tool usage
 - Think BEFORE searching — what specific information do you need?

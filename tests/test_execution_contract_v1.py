@@ -152,3 +152,63 @@ def test_mock_output_follows_contract() -> None:
     assert run_action["depends_on"] and run_action["depends_on"][0] in {
         a["action_id"] for a in decision["recommended_actions"]
     }
+
+
+def test_fan_in_analysis_fixture_roundtrip() -> None:
+    """Two experiments + one result_analysis depending on both validates."""
+    path = FIXTURE_DIR / "fan_in_analysis.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+
+    decision = ScientificDecision.model_validate(data)
+    vr = validate_decision(decision)
+    assert vr.status == "ok", f"Fan-in analysis fixture should validate: {vr.issues}"
+
+    analysis = decision.recommended_actions[-1]
+    assert analysis.type == "result_analysis"
+    assert analysis.plan.kind == "result_analysis"
+    assert analysis.depends_on == ["run_baseline", "run_proposed"]
+    assert analysis.plan.task_goal == "Compare baseline vs proposed accuracy"
+
+
+def test_required_defaults_to_true() -> None:
+    """required defaults to True when not specified."""
+    action = _run_action("run_1")
+    assert action.required is True
+
+
+def test_required_false_accepted() -> None:
+    """An explicitly optional action may set required=False."""
+    action = _run_action("run_1", required=False)
+    decision = _make_decision([action])
+    vr = validate_decision(decision)
+    assert vr.status == "ok"
+    assert decision.recommended_actions[0].required is False
+
+
+def test_result_analysis_requires_task_goal() -> None:
+    """result_analysis must carry a non-empty task_goal."""
+    decision = _make_decision([
+        RecommendedAction(
+            priority="high",
+            type="result_analysis",
+            rationale="Analyze the results",
+            action_id="analyze",
+            plan=SuggestedPlan(kind="result_analysis", task_goal=""),
+        ),
+    ])
+    vr = validate_decision(decision)
+    assert vr.status == "needs_revision"
+    assert any("task_goal" in i for i in vr.issues), vr.issues
+
+
+def test_finish_schema_has_result_analysis_and_required() -> None:
+    """The finish tool schema exposes result_analysis and required."""
+    from experiment_designer.prompts import TOOLS
+
+    finish = next(t["function"] for t in TOOLS if t["function"]["name"] == "finish")
+    action_schema = finish["parameters"]["properties"]["recommended_actions"]["items"]
+    assert "result_analysis" in action_schema["properties"]["type"]["enum"]
+    assert "required" in action_schema["properties"]
+
+    plan_schema = action_schema["properties"]["plan"]
+    assert "result_analysis" in plan_schema["properties"]["kind"]["enum"]

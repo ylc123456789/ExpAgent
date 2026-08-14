@@ -246,14 +246,14 @@ class SuggestedPlan(BaseModel):
     to execute the action — no additional files or lookups required.
     """
 
-    kind: Literal["coding_task", "repro_task", "run_task", "literature_search", "ask_user", "literature_reference"] = Field(
-        description="What kind of task this is. 'literature_reference' means directly cite the paper's reported numbers."
+    kind: Literal["coding_task", "repro_task", "run_task", "literature_search", "ask_user", "literature_reference", "result_analysis"] = Field(
+        description="What kind of task this is. 'literature_reference' means directly cite the paper's reported numbers. 'result_analysis' means interpret experiment results (an ExpAgent-internal task, not a ReproAgent run)."
     )
     code_availability: Literal["public", "upon_request", "none", ""] = Field(
         default="",
         description="Whether code is available: public (has repo), upon_request (email author), none (no code). Only relevant for repro tasks."
     )
-    # For coding tasks
+    # Goal for coding / result_analysis tasks
     task_goal: str = ""
     constraints: list[str] = Field(default_factory=list)
     verify_commands: list[str] = Field(default_factory=list)
@@ -289,7 +289,7 @@ class RecommendedAction(BaseModel):
     priority: Literal["high", "medium", "low"] = Field(
         description="How urgent/important this action is"
     )
-    type: Literal["repro_task", "coding_task", "run_task", "literature_search", "literature_reference", "ask_user"] = Field(
+    type: Literal["repro_task", "coding_task", "run_task", "literature_search", "literature_reference", "ask_user", "result_analysis"] = Field(
         description="What kind of action to take"
     )
     rationale: str = Field(
@@ -300,8 +300,7 @@ class RecommendedAction(BaseModel):
     )
     action_id: str = Field(
         default="",
-        description="Unique id within this decision, e.g. 'patch_training_loop'. "
-                    "Required only when another action depends on this one."
+        description="Unique, non-empty id within this decision, e.g. 'patch_training_loop'."
     )
     depends_on: list[str] = Field(
         default_factory=list,
@@ -319,6 +318,12 @@ class RecommendedAction(BaseModel):
                     "(operate on the project referenced by project_ref) or "
                     "'isolated' (private clone/copy). Empty when undecided. "
                     "ResAgent resolves this to a physical workspace at dispatch."
+    )
+    required: bool = Field(
+        default=True,
+        description="Whether ResAgent must complete this action before finishing. "
+                    "True for scientific conclusions, requested experiments, and "
+                    "final result analysis; False only for genuinely optional follow-ups."
     )
 
 
