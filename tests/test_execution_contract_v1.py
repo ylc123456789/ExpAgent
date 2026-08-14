@@ -172,6 +172,36 @@ def test_analysis_required_false_allows_uncovered_experiment() -> None:
     assert vr.status == "ok", vr.issues
 
 
+def test_required_action_cannot_depend_on_optional() -> None:
+    """A required action's hard dependencies must all be required.
+
+    required-analyze depending on optional-experiment is a scheduler trap:
+    the "optional" experiment is forced to execute (or the required
+    analysis can never run). The graph is rejected so the model re-marks
+    the chain consistently.
+    """
+    decision = _make_decision([
+        _execute_action("run_1", required=False, depends_on=[]),
+        _analyze_action("analyze_1", required=True, depends_on=["run_1"]),
+    ])
+    vr = validate_decision(decision)
+    assert vr.status == "needs_revision"
+    assert any("dependencies must all be required" in i for i in vr.issues), vr.issues
+
+
+def test_consistent_requirement_chains_validate() -> None:
+    all_required = _make_decision([
+        _execute_action("run_1", required=True, depends_on=[]),
+        _analyze_action("analyze_1", required=True, depends_on=["run_1"]),
+    ])
+    assert validate_decision(all_required).status == "ok"
+    all_optional = _make_decision([
+        _execute_action("run_1", required=False, depends_on=[]),
+        _analyze_action("analyze_1", required=False, depends_on=["run_1"]),
+    ])
+    assert validate_decision(all_optional).status == "ok"
+
+
 def test_required_defaults_to_true() -> None:
     assert _execute_action("run_1").required is True
 

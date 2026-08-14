@@ -169,6 +169,25 @@ def _validate_action_dependencies(decision: ScientificDecision) -> list[str]:
                     f"EARLIER action (found at index {id_position[dep_id]}) to keep the graph acyclic"
                 )
 
+    # Requirement flows backward along hard dependencies: every dependency of
+    # a REQUIRED action must itself be required. A required action depending
+    # on an optional one is a scheduler trap — the "optional" dependency is
+    # forced to execute (or the required dependent can never run).
+    required_by_id = {
+        a.action_id: bool(a.required) for a in actions if a.action_id.strip()
+    }
+    for i, action in enumerate(actions):
+        if not bool(action.required):
+            continue
+        for dep_id in action.depends_on:
+            if dep_id in required_by_id and not required_by_id[dep_id]:
+                issues.append(
+                    f"recommended_actions[{i}] ({action.capability}) is required but depends "
+                    f"on optional action '{dep_id}' — a required action's dependencies must "
+                    f"all be required. Require the whole chain, or mark this action "
+                    f"required=false (optional follow-up)."
+                )
+
     return issues
 
 
