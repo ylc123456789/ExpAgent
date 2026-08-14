@@ -25,45 +25,48 @@ decision, trace = advise(ctx, model="deepseek-chat")
 
 ## 3. 输出格式: ScientificDecision
 
-每个 `recommended_action.plan` 是**自包含**的完整方案，下游可直接使用。
-
 `conclusion` 可选（纯问答/讨论类请求时为 None）。
 
-每个 `recommended_action` 还携带**逻辑动作图**字段（EXECUTION_CONTRACT_V1）：
+`recommended_actions` 是**科学动作图**（V2 契约，SCIENTIFIC_ORCHESTRATION_MAINLINE_REDESIGN.md）：
+每个动作是一个按 `capability` 判别的 typed `ScientificAction`。公共字段：
 
-- `action_id` — 决策内唯一标识
-- `depends_on` — 依赖的前序 `action_id`（保持无环，引用更早的动作）
+- `action_id` — 决策内唯一标识（非空）
+- `capability` — 判别字段（六类之一）
+- `objective` — 一句话科学目标
+- `rationale` — 科学理由
+- `depends_on` — 依赖的前序 `action_id`（无环）
 - `project_ref` — 共享同一仓库的逻辑项目标识
-- `workspace_intent` — `shared`（在同一 repo 上跑）/ `isolated`（私有副本）/ 空
+- `required` — 是否必须完成
+- `success_criteria` — 可度量的成功标准
 
-ExpAgent 只表达科学意图与逻辑引用，**不输出物理路径**（`workspace_path`/
-`external_repo_path`/`copy_from`/`env_name`/绝对路径），由 ResAgent 派发时解析注入。
+ExpAgent 只表达科学意图与逻辑引用，**不输出物理路径、executor、环境名**，由 ResAgent 派发时解析注入。
 
 ```json
 recommended_actions:
-  - priority: high
-    type: repro_task
+  - capability: reproduce_experiment
+    action_id: repro_senet
+    objective: "在 CIFAR-10 上复现 SE-ResNet-18 (10 epochs)"
     rationale: "需要 SE-Net 作为通道注意力 baseline"
-    plan:
-      kind: repro_task
-      paper_url: "https://arxiv.org/abs/1709.01507"
-      repo_url: "https://github.com/moskomule/senet.pytorch"
-      experiment_goal: "在 CIFAR-10 上复现 SE-ResNet-18 (10 epochs)"
-      code_availability: public
-      compute_budget:
-        gpu: "RTX 4090"
-        max_runtime: "30 minutes"
+    depends_on: []
+    project_ref: my_research
+    required: true
+    success_criteria: ["复现报告中的 test accuracy"]
+    paper_url: "https://arxiv.org/abs/1709.01507"
+    repo_url: "https://github.com/moskomule/senet.pytorch"
+    code_availability: public
+    expected_metrics: ["top-1 accuracy"]
 ```
 
-## 4. Action 类型
+## 4. Capability 词表
 
-| type | 含义 | code_availability |
-|------|------|-------------------|
-| `repro_task` | 复现论文方法 | `public` / `upon_request` / `none` |
-| `coding_task` | 写/改代码 | N/A |
-| `run_task` | 运行实验 | N/A |
-| `literature_search` | 需要进一步检索 | N/A |
-| `ask_user` | 需要人工回答 | N/A |
+| capability | 科学语义 | 默认执行模块 |
+|------------|----------|--------------|
+| `modify_code` | 实现/修改实验代码 | CodingAgent |
+| `reproduce_experiment` | 从论文/仓库复现方法 | ReproAgent |
+| `execute_experiment` | 在已有项目中执行实验 | ReproAgent |
+| `analyze_results` | 解释指标/比较方法/判断假设 | ExpAgent |
+| `search_literature` | 检索并分析论文 | ExpAgent |
+| `ask_user` | 请求必要的人类输入 | ResAgent |
 
 ## 5. 下游消费方式
 

@@ -69,7 +69,6 @@ def plan(
 
 def _populate_tasks_from_actions(plan: ExperimentPlan, actions: list) -> ExperimentPlan:
     """Ensure experiment_plan.tasks is populated from recommended_actions if empty."""
-    from ..models import RecommendedAction
     if not plan.tasks.coding_tasks and not plan.tasks.repro_tasks and not plan.tasks.run_tasks:
         plan.tasks.coding_tasks = _extract_coding_tasks(actions)
         plan.tasks.repro_tasks = _extract_repro_tasks(actions)
@@ -81,33 +80,31 @@ def _extract_coding_tasks(actions: list) -> list:
     from ..models import CodingTask
     tasks = []
     for i, a in enumerate(actions):
-        if a.type == "coding_task":
-            p = a.plan
+        if a.capability == "modify_code":
             tasks.append(CodingTask(
                 id=f"code_{i+1:03d}",
                 workspace_path="",  # ResAgent resolves at dispatch (ExpAgent emits no physical paths)
-                task_goal=p.task_goal or p.experiment_goal or a.rationale[:100],
-                constraints=p.constraints,
-                verify_commands=p.verify_commands,
-                expected_artifacts=p.expected_artifacts,
+                task_goal=a.objective or a.rationale[:100],
+                constraints=a.constraints,
+                verify_commands=a.verify_commands,
+                expected_artifacts=a.expected_artifacts,
                 rationale=a.rationale,
             ))
     return tasks
 
 
 def _extract_repro_tasks(actions: list) -> list:
-    from ..models import ReproTask, ComputeBudget
+    from ..models import ReproTask
     tasks = []
     for i, a in enumerate(actions):
-        if a.type == "repro_task":
-            p = a.plan
+        if a.capability == "reproduce_experiment":
             tasks.append(ReproTask(
                 id=f"repro_{i+1:03d}",
-                paper_url=p.paper_url,
-                repo_url=p.repo_url,
-                experiment_goal=p.experiment_goal or a.rationale,
-                compute_budget=p.compute_budget,
-                expected_metrics=p.expected_metrics,
+                paper_url=a.paper_url,
+                repo_url=a.repo_url,
+                experiment_goal=a.objective or a.rationale,
+                compute_budget=a.compute_budget,
+                expected_metrics=a.expected_metrics,
                 rationale=a.rationale,
             ))
     return tasks
@@ -117,13 +114,12 @@ def _extract_run_tasks(actions: list) -> list:
     from ..models import RunTask
     tasks = []
     for i, a in enumerate(actions):
-        if a.type == "run_task":
-            p = a.plan
+        if a.capability == "execute_experiment":
             tasks.append(RunTask(
                 id=f"run_{i+1:03d}",
-                command_goal=p.command_goal or p.experiment_goal or a.rationale[:100],
-                expected_runtime=p.expected_runtime,
-                requires_gpu=p.requires_gpu,
+                command_goal=a.objective or a.rationale[:100],
+                expected_runtime="",
+                requires_gpu=a.requires_gpu,
                 rationale=a.rationale,
             ))
     return tasks

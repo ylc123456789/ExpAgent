@@ -495,7 +495,7 @@ class TestV2Models:
         import yaml
         from experiment_designer.models import (
             ScientificDecision, ScientificConclusion, EvidenceItem,
-            RecommendedAction, SuggestedPlan,
+            ReproduceExperimentAction,
         )
 
         sd = ScientificDecision(
@@ -504,15 +504,13 @@ class TestV2Models:
             conclusion=ScientificConclusion(status="needs_more_experiments", rationale="Need more data"),
             evidence=[EvidenceItem(source="reasoning", description="Logic suggests more trials")],
             recommended_actions=[
-                RecommendedAction(
-                    priority="high", type="repro_task",
+                ReproduceExperimentAction(
+                    action_id="repro_baseline",
+                    capability="reproduce_experiment",
+                    objective="Reproduce results",
                     rationale="Reproduce baseline",
-                    plan=SuggestedPlan(
-                        kind="repro_task",
-                        paper_url="https://example.com/paper",
-                        repo_url="https://github.com/example/repo",
-                        experiment_goal="Reproduce results",
-                    ),
+                    paper_url="https://example.com/paper",
+                    repo_url="https://github.com/example/repo",
                 )
             ],
             risks=["Small sample size"],

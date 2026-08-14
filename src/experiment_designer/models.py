@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, Field
 
@@ -239,92 +239,96 @@ class EvidenceItem(BaseModel):
     description: str = Field(description="What this evidence shows")
 
 
-class SuggestedPlan(BaseModel):
-    """A self-contained, executable plan embedded in a RecommendedAction.
-
-    Downstream agents (CodingAgent, ReproAgent, Runner) need ALL of this
-    to execute the action — no additional files or lookups required.
-    """
-
-    kind: Literal["coding_task", "repro_task", "run_task", "literature_search", "ask_user", "literature_reference", "result_analysis"] = Field(
-        description="What kind of task this is. 'literature_reference' means directly cite the paper's reported numbers. 'result_analysis' means interpret experiment results (an ExpAgent-internal task, not a ReproAgent run)."
-    )
-    code_availability: Literal["public", "upon_request", "none", ""] = Field(
-        default="",
-        description="Whether code is available: public (has repo), upon_request (email author), none (no code). Only relevant for repro tasks."
-    )
-    # Goal for coding / result_analysis tasks
-    task_goal: str = ""
-    constraints: list[str] = Field(default_factory=list)
-    verify_commands: list[str] = Field(default_factory=list)
-    expected_artifacts: list[str] = Field(default_factory=list)
-    # For repro tasks
-    paper_url: str = ""
-    repo_url: str = ""
-    experiment_goal: str = ""
-    compute_budget: ComputeBudget | None = None
-    expected_metrics: list[str] = Field(default_factory=list)
-    # For run tasks
-    command_goal: str = ""
-    expected_runtime: str = ""
-    requires_gpu: bool = False
-    # For literature search
-    search_query: str = ""
-    # For ask_user
-    question: str = ""
+# ── V2 scientific action contract ─────────────────────────────────
+# Each recommended action is a discriminated union on `capability`.
+# ExpAgent expresses scientific intent + a logical action graph only;
+# it never emits executors, physical paths, or environment names.
 
 
-class RecommendedAction(BaseModel):
-    """A scientific recommendation with a complete executable plan.
+class ScientificActionBase(BaseModel):
+    """Common fields for every scientific action in a decision's action graph."""
 
-    ResAgent reads these, decides which to execute, and dispatches
-    to the appropriate downstream agent with the embedded plan.
-
-    Optional dependency metadata (action_id, depends_on, project_ref,
-    workspace_intent) forms the logical action graph. ExpAgent expresses
-    scientific intent and ordering; ResAgent resolves physical paths at
-    dispatch time.
-    """
-
-    priority: Literal["high", "medium", "low"] = Field(
-        description="How urgent/important this action is"
-    )
-    type: Literal["repro_task", "coding_task", "run_task", "literature_search", "literature_reference", "ask_user", "result_analysis"] = Field(
-        description="What kind of action to take"
-    )
-    rationale: str = Field(
-        description="Scientific justification — WHY this action is recommended"
-    )
-    plan: SuggestedPlan = Field(
-        description="Complete executable plan. Downstream agents use this directly."
-    )
-    action_id: str = Field(
-        default="",
-        description="Unique, non-empty id within this decision, e.g. 'patch_training_loop'."
-    )
+    action_id: str = Field(description="Unique, non-empty id within this decision")
+    capability: str = Field(description="Capability this action needs (union discriminator)")
+    objective: str = Field(description="One-sentence scientific objective of this action")
+    rationale: str = Field(description="Scientific justification — WHY this action")
     depends_on: list[str] = Field(
         default_factory=list,
-        description="IDs of actions in this same decision that must complete "
-                    "before this one. References must be valid action_ids."
+        description="action_ids of earlier actions that must complete first",
     )
     project_ref: str = Field(
         default="",
-        description="Logical project/workspace identifier shared across "
-                    "dependent actions, e.g. 'current_project'."
-    )
-    workspace_intent: Literal["shared", "isolated", ""] = Field(
-        default="",
-        description="Workspace sharing intent for run/repro tasks: 'shared' "
-                    "(operate on the project referenced by project_ref) or "
-                    "'isolated' (private clone/copy). Empty when undecided. "
-                    "ResAgent resolves this to a physical workspace at dispatch."
+        description="Logical project identity shared across actions touching one repository",
     )
     required: bool = Field(
         default=True,
-        description="Whether ResAgent must complete this action before finishing. "
-                    "True for scientific conclusions, requested experiments, and "
-                    "final result analysis; False only for genuinely optional follow-ups."
+        description="Whether ResAgent must complete this action before finishing",
     )
+    success_criteria: list[str] = Field(
+        default_factory=list,
+        description="Concrete, measurable success criteria",
+    )
+
+
+class ModifyCodeAction(ScientificActionBase):
+    """Implement or modify experiment code (CodingAgent)."""
+
+    capability: Literal["modify_code"] = "modify_code"
+    constraints: list[str] = Field(default_factory=list)
+    verify_commands: list[str] = Field(default_factory=list)
+    expected_artifacts: list[str] = Field(default_factory=list)
+
+
+class ReproduceExperimentAction(ScientificActionBase):
+    """Reproduce a method from a paper/repo (experiment operator)."""
+
+    capability: Literal["reproduce_experiment"] = "reproduce_experiment"
+    paper_url: str = ""
+    repo_url: str = ""
+    code_availability: Literal["public", "upon_request", "none", ""] = ""
+    compute_budget: ComputeBudget | None = None
+    expected_metrics: list[str] = Field(default_factory=list)
+
+
+class ExecuteExperimentAction(ScientificActionBase):
+    """Execute an experiment in an existing project (experiment operator)."""
+
+    capability: Literal["execute_experiment"] = "execute_experiment"
+    requires_gpu: bool = False
+    expected_metrics: list[str] = Field(default_factory=list)
+
+
+class AnalyzeResultsAction(ScientificActionBase):
+    """Interpret metrics, compare methods, or judge a hypothesis (ExpAgent)."""
+
+    capability: Literal["analyze_results"] = "analyze_results"
+
+
+class SearchLiteratureAction(ScientificActionBase):
+    """Search and analyze relevant papers (ExpAgent)."""
+
+    capability: Literal["search_literature"] = "search_literature"
+    search_query: str = ""
+
+
+class AskUserAction(ScientificActionBase):
+    """Request necessary human input (ResAgent)."""
+
+    capability: Literal["ask_user"] = "ask_user"
+    question: str = ""
+
+
+ScientificAction = Annotated[
+    Union[
+        ModifyCodeAction,
+        ReproduceExperimentAction,
+        ExecuteExperimentAction,
+        AnalyzeResultsAction,
+        SearchLiteratureAction,
+        AskUserAction,
+    ],
+    Field(discriminator="capability"),
+]
 
 
 class ResultAnalysis(BaseModel):
@@ -354,7 +358,7 @@ class ScientificDecision(BaseModel):
     - Optional embedded experiment plan (for design/revision modes)
     - Optional result analysis (for analyze mode)
     - Optional failure diagnosis (for failure mode)
-    - Prioritized recommended actions (each with complete executable plan)
+    - A logical scientific action graph (typed by capability)
     """
 
     summary: str = Field(description="One-sentence summary of the scientific decision")
@@ -384,10 +388,16 @@ class ScientificDecision(BaseModel):
         description="Failure diagnosis (present when diagnosing failures)",
     )
 
-    recommended_actions: list[RecommendedAction] = Field(
+    recommended_actions: list[ScientificAction] = Field(
         default_factory=list,
-        description="Prioritized list of actions ResAgent should consider. "
-                    "Each action contains a complete self-contained plan.",
+        description="Logical scientific action graph. Each element is a typed "
+                    "ScientificAction discriminated on capability.",
+    )
+    analysis_required: bool = Field(
+        default=True,
+        description="Whether terminal experiments must be covered by an "
+                    "analyze_results action before the run can finish. Set "
+                    "False only for pure engineering smoke tests.",
     )
 
     risks: list[str] = Field(

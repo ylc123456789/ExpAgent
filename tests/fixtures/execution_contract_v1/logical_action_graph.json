@@ -10,33 +10,42 @@
   ],
   "recommended_actions": [
     {
-      "priority": "high",
-      "type": "coding_task",
-      "rationale": "Add loss logging to the training loop.",
+      "capability": "modify_code",
       "action_id": "patch_training_loop",
+      "objective": "Add loss logging to the training loop",
+      "rationale": "Loss is not currently logged.",
       "depends_on": [],
       "project_ref": "my_research",
-      "workspace_intent": "",
-      "plan": {
-        "kind": "coding_task",
-        "task_goal": "Add loss logging to the training loop"
-      }
+      "required": true,
+      "success_criteria": ["training loop logs loss"],
+      "constraints": [],
+      "verify_commands": [],
+      "expected_artifacts": []
     },
     {
-      "priority": "high",
-      "type": "run_task",
-      "rationale": "Run a bounded validation after the code patch.",
+      "capability": "execute_experiment",
       "action_id": "run_with_patch",
+      "objective": "Run a bounded validation experiment",
+      "rationale": "Measure the effect of the patch.",
       "depends_on": ["patch_training_loop"],
       "project_ref": "my_research",
-      "workspace_intent": "shared",
-      "plan": {
-        "kind": "run_task",
-        "command_goal": "Run a bounded validation experiment",
-        "requires_gpu": true
-      }
+      "required": true,
+      "success_criteria": ["validation completes"],
+      "requires_gpu": true,
+      "expected_metrics": ["train loss", "top-1 accuracy"]
+    },
+    {
+      "capability": "analyze_results",
+      "action_id": "analyze_after_run",
+      "objective": "Compare accuracy and judge the hypothesis",
+      "rationale": "Interpret the bounded run.",
+      "depends_on": ["run_with_patch"],
+      "project_ref": "my_research",
+      "required": true,
+      "success_criteria": ["conclusion status + evidence"]
     }
   ],
+  "analysis_required": true,
   "risks": ["The bounded run may not generalize"],
   "needs_user_input": []
 }

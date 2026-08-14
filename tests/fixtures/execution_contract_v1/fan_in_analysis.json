@@ -10,39 +10,41 @@
   ],
   "recommended_actions": [
     {
-      "priority": "high",
-      "type": "run_task",
-      "rationale": "Measure the baseline.",
+      "capability": "execute_experiment",
       "action_id": "run_baseline",
+      "objective": "Run the baseline experiment",
+      "rationale": "Measure the baseline.",
       "depends_on": [],
       "project_ref": "my_research",
-      "workspace_intent": "shared",
       "required": true,
-      "plan": {"kind": "run_task", "command_goal": "Run the baseline experiment", "requires_gpu": true}
+      "success_criteria": ["baseline test accuracy recorded"],
+      "requires_gpu": true,
+      "expected_metrics": ["test accuracy"]
     },
     {
-      "priority": "high",
-      "type": "run_task",
-      "rationale": "Measure the proposed method.",
+      "capability": "execute_experiment",
       "action_id": "run_proposed",
+      "objective": "Run the proposed experiment",
+      "rationale": "Measure the proposed method.",
       "depends_on": [],
       "project_ref": "my_research",
-      "workspace_intent": "shared",
       "required": true,
-      "plan": {"kind": "run_task", "command_goal": "Run the proposed experiment", "requires_gpu": true}
+      "success_criteria": ["proposed test accuracy recorded"],
+      "requires_gpu": true,
+      "expected_metrics": ["test accuracy"]
     },
     {
-      "priority": "high",
-      "type": "result_analysis",
-      "rationale": "Interpret the two measurements scientifically.",
+      "capability": "analyze_results",
       "action_id": "analyze_comparison",
+      "objective": "Compare baseline vs proposed accuracy",
+      "rationale": "Interpret the two measurements scientifically.",
       "depends_on": ["run_baseline", "run_proposed"],
       "project_ref": "my_research",
-      "workspace_intent": "",
       "required": true,
-      "plan": {"kind": "result_analysis", "task_goal": "Compare baseline vs proposed accuracy"}
+      "success_criteria": ["conclusion status + evidence"]
     }
   ],
+  "analysis_required": true,
   "risks": ["The bounded runs may not generalize"],
   "needs_user_input": []
 }

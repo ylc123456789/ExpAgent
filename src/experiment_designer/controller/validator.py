@@ -172,6 +172,38 @@ def _validate_action_dependencies(decision: ScientificDecision) -> list[str]:
     return issues
 
 
+def _validate_analysis_coverage(decision: ScientificDecision) -> list[str]:
+    """Ensure terminal experiments are covered by analyze_results when required.
+
+    When analysis_required is True (the default), every experiment action
+    (execute_experiment / reproduce_experiment) must be depended on by at
+    least one analyze_results action.
+    """
+    issues: list[str] = []
+    if not decision.analysis_required:
+        return issues
+
+    experiment_ids = [
+        a.action_id for a in decision.recommended_actions
+        if a.capability in ("execute_experiment", "reproduce_experiment")
+    ]
+    if not experiment_ids:
+        return issues
+
+    covered: set[str] = set()
+    for a in decision.recommended_actions:
+        if a.capability == "analyze_results":
+            covered.update(a.depends_on)
+
+    for eid in experiment_ids:
+        if eid not in covered:
+            issues.append(
+                f"experiment action '{eid}' has no analyze_results coverage — "
+                f"analysis_required is true, so every experiment must be analyzed"
+            )
+    return issues
+
+
 def validate_decision(decision: ScientificDecision) -> ValidationResult:
     """Validate a ScientificDecision for structural completeness.
 
@@ -204,37 +236,38 @@ def validate_decision(decision: ScientificDecision) -> ValidationResult:
         if "no action" not in decision.conclusion.rationale.lower():
             issues.append("recommended_actions is empty — if no actions are needed, explain why in the conclusion")
 
-    # Each action must have a complete plan
+    # Each action's capability-specific fields
     for i, action in enumerate(decision.recommended_actions):
         if not action.rationale.strip():
             issues.append(f"recommended_actions[{i}]: rationale is empty")
-        plan = action.plan
-        if action.type == "repro_task":
-            if not plan.paper_url.strip():
-                issues.append(f"recommended_actions[{i}] (repro_task): plan.paper_url is empty")
-            if not plan.repo_url.strip():
-                issues.append(f"recommended_actions[{i}] (repro_task): plan.repo_url is empty")
-            if not plan.experiment_goal.strip():
-                issues.append(f"recommended_actions[{i}] (repro_task): plan.experiment_goal is empty")
-        elif action.type == "coding_task":
-            if not plan.task_goal.strip():
-                issues.append(f"recommended_actions[{i}] (coding_task): plan.task_goal is empty")
-        elif action.type == "run_task":
-            if not plan.command_goal.strip():
-                issues.append(f"recommended_actions[{i}] (run_task): plan.command_goal is empty")
-        elif action.type == "literature_search":
-            if not plan.search_query.strip():
-                issues.append(f"recommended_actions[{i}] (literature_search): plan.search_query is empty")
-        elif action.type == "result_analysis":
-            if not plan.task_goal.strip():
-                issues.append(f"recommended_actions[{i}] (result_analysis): plan.task_goal is empty")
+        if not action.objective.strip():
+            issues.append(f"recommended_actions[{i}] ({action.capability}): objective is empty")
+        cap = action.capability
+        if cap == "reproduce_experiment":
+            if not action.paper_url.strip():
+                issues.append(f"recommended_actions[{i}] (reproduce_experiment): paper_url is empty")
+            if not action.repo_url.strip():
+                issues.append(f"recommended_actions[{i}] (reproduce_experiment): repo_url is empty")
+        elif cap == "execute_experiment":
+            if not action.expected_metrics and not action.success_criteria:
+                issues.append(f"recommended_actions[{i}] (execute_experiment): must include expected_metrics or success_criteria")
+        elif cap == "search_literature":
+            if not action.search_query.strip():
+                issues.append(f"recommended_actions[{i}] (search_literature): search_query is empty")
+        elif cap == "analyze_results":
+            if not action.depends_on:
+                issues.append(f"recommended_actions[{i}] (analyze_results): must depend on at least one experiment action")
+        elif cap == "ask_user":
+            if not action.question.strip():
+                issues.append(f"recommended_actions[{i}] (ask_user): question is empty")
 
     # Risks
     if not decision.risks:
         issues.append("risks is empty — must identify at least one scientific risk")
 
-    # Action dependency metadata
+    # Action dependency metadata + analysis coverage
     issues.extend(_validate_action_dependencies(decision))
+    issues.extend(_validate_analysis_coverage(decision))
 
     # Experiment plan (when present, must be complete)
     if decision.experiment_plan is not None:

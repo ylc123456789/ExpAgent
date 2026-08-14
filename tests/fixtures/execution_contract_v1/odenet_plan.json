@@ -1,0 +1,38 @@
+{
+  "summary": "Run a bounded ODE-Net MNIST experiment, then interpret the result and its deviations",
+  "confidence": "medium",
+  "conclusion": {
+    "status": "needs_more_experiments",
+    "rationale": "A bounded run must be interpreted before drawing any scientific conclusion."
+  },
+  "evidence": [
+    {"source": "reasoning", "description": "A 3-epoch run is a smoke baseline, not a full reproduction."}
+  ],
+  "recommended_actions": [
+    {
+      "capability": "execute_experiment",
+      "action_id": "run_odenet",
+      "objective": "Run three epochs of ODE-Net MNIST and record accuracy and runtime",
+      "rationale": "Verify the official implementation runs end-to-end in the current GPU environment.",
+      "depends_on": [],
+      "project_ref": "odenet_mnist",
+      "required": true,
+      "success_criteria": ["complete 3 epochs", "record per-epoch test accuracy"],
+      "requires_gpu": true,
+      "expected_metrics": ["train accuracy", "test accuracy", "runtime"]
+    },
+    {
+      "capability": "analyze_results",
+      "action_id": "analyze_odenet",
+      "objective": "Judge whether the result forms a valid learning signal and explain deviations from the paper configuration",
+      "rationale": "A bounded experiment is not equivalent to the paper's full reproduction.",
+      "depends_on": ["run_odenet"],
+      "project_ref": "odenet_mnist",
+      "required": true,
+      "success_criteria": ["conclusion status", "list configuration deviations and evidence"]
+    }
+  ],
+  "analysis_required": true,
+  "risks": ["The bounded run may not reflect full-training performance"],
+  "needs_user_input": []
+}

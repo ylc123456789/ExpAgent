@@ -19,42 +19,29 @@ _EVIDENCE_ITEM_SCHEMA = {
     "required": ["source", "description"],
 }
 
-_SUGGESTED_PLAN_SCHEMA = {
+_SCIENTIFIC_ACTION_SCHEMA = {
     "type": "object",
     "properties": {
-        "kind": {"type": "string", "enum": ["coding_task", "repro_task", "run_task", "literature_search", "ask_user", "literature_reference", "result_analysis"]},
-        "code_availability": {"type": "string", "enum": ["public", "upon_request", "none", ""]},
-        "task_goal": {"type": "string"},
+        "capability": {"type": "string", "enum": ["modify_code", "reproduce_experiment", "execute_experiment", "analyze_results", "search_literature", "ask_user"]},
+        "action_id": {"type": "string", "minLength": 1, "description": "Unique, non-empty id within this decision."},
+        "objective": {"type": "string", "minLength": 1, "description": "One-sentence scientific objective of this action."},
+        "rationale": {"type": "string", "minLength": 1, "description": "Scientific justification — WHY this action."},
+        "depends_on": {"type": "array", "items": {"type": "string"}, "description": "action_ids of earlier actions that must complete first."},
+        "project_ref": {"type": "string", "description": "Logical project identity shared across actions touching one repository."},
+        "required": {"type": "boolean", "description": "Whether this action must complete before finishing. Default true."},
+        "success_criteria": {"type": "array", "items": {"type": "string"}, "description": "Concrete, measurable success criteria."},
         "constraints": {"type": "array", "items": {"type": "string"}},
         "verify_commands": {"type": "array", "items": {"type": "string"}},
         "expected_artifacts": {"type": "array", "items": {"type": "string"}},
         "paper_url": {"type": "string"},
         "repo_url": {"type": "string"},
-        "experiment_goal": {"type": "string"},
-        "expected_metrics": {"type": "array", "items": {"type": "string"}},
-        "command_goal": {"type": "string"},
-        "expected_runtime": {"type": "string"},
+        "code_availability": {"type": "string", "enum": ["public", "upon_request", "none", ""]},
         "requires_gpu": {"type": "boolean"},
+        "expected_metrics": {"type": "array", "items": {"type": "string"}},
         "search_query": {"type": "string"},
         "question": {"type": "string"},
     },
-    "required": ["kind"],
-}
-
-_RECOMMENDED_ACTION_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "priority": {"type": "string", "enum": ["high", "medium", "low"]},
-        "type": {"type": "string", "enum": ["repro_task", "coding_task", "run_task", "literature_search", "literature_reference", "ask_user", "result_analysis"]},
-        "rationale": {"type": "string", "minLength": 1},
-        "plan": _SUGGESTED_PLAN_SCHEMA,
-        "action_id": {"type": "string", "description": "Unique, non-empty id within this decision."},
-        "depends_on": {"type": "array", "items": {"type": "string"}, "description": "IDs of actions in this same decision that must complete before this one."},
-        "project_ref": {"type": "string", "description": "Logical project identifier shared across dependent actions."},
-        "workspace_intent": {"type": "string", "enum": ["shared", "isolated", ""], "description": "Workspace sharing intent for run/repro tasks. shared = operate on project_ref in place; isolated = private clone/copy; empty = undecided."},
-        "required": {"type": "boolean", "description": "Whether ResAgent must complete this action before finishing. Default true; false only for genuinely optional follow-ups."},
-    },
-    "required": ["priority", "type", "rationale", "plan"],
+    "required": ["capability", "action_id", "objective", "rationale"],
 }
 
 _DATASET_SCHEMA = {
@@ -292,11 +279,12 @@ TOOLS = [
                     "conclusion_rationale": {"type": "string", "minLength": 1, "description": "Detailed scientific reasoning"},
                     "evidence": {"type": "array", "minItems": 1, "items": _EVIDENCE_ITEM_SCHEMA,
                         "description": "Evidence supporting the conclusion"},
-                    "recommended_actions": {"type": "array", "items": _RECOMMENDED_ACTION_SCHEMA,
-                        "description": "Prioritized actions. plan.kind must match the action type; operational fields may be empty."},
+                    "recommended_actions": {"type": "array", "items": _SCIENTIFIC_ACTION_SCHEMA,
+                        "description": "Logical scientific action graph (typed by capability)."},
                     "experiment_plan": _EXPERIMENT_PLAN_SCHEMA,
                     "result_analysis": _RESULT_ANALYSIS_SCHEMA,
                     "failure_diagnosis": _FAILURE_DIAGNOSIS_SCHEMA,
+                    "analysis_required": {"type": "boolean", "description": "Whether terminal experiments must be analyzed. Default true; false only for pure engineering smoke tests."},
                     "risks": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1},
                         "description": "Scientific risks"},
                     "needs_user_input": {"type": "array", "items": {"type": "string"},

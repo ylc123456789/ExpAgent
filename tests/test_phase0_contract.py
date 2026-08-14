@@ -10,9 +10,9 @@ import experiment_designer
 from experiment_designer.main import _parse_args
 from experiment_designer.models import (
     AdvisorContext,
-    RecommendedAction,
+    AnalyzeResultsAction,
+    ExecuteExperimentAction,
     ScientificDecision,
-    SuggestedPlan,
 )
 from experiment_designer.prompts import SYSTEM_PROMPT, build_initial_prompt
 
@@ -23,13 +23,14 @@ def _sha256(text: str) -> str:
 
 def test_public_package_contract() -> None:
     assert experiment_designer.__all__ == [
-        "AdvisorContext", "AnalysisPlan", "ArtifactRef", "CodingTask",
-        "ComputeBudget", "ContextPolicy", "DatasetSpec", "DesignInput",
-        "EvidenceItem", "ExistingAssets", "ExperimentMatrix", "ExperimentPlan",
-        "FailureDiagnosis", "MethodSpec", "MetricSpec", "RecommendedAction",
+        "AdvisorContext", "AnalysisPlan", "AnalyzeResultsAction", "ArtifactRef",
+        "AskUserAction", "CodingTask", "ComputeBudget", "ContextPolicy",
+        "DatasetSpec", "DesignInput", "EvidenceItem", "ExecuteExperimentAction",
+        "ExistingAssets", "ExperimentMatrix", "ExperimentPlan", "FailureDiagnosis",
+        "MethodSpec", "MetricSpec", "ModifyCodeAction", "ReproduceExperimentAction",
         "ReproTask", "ResearchGoal", "ResultAnalysis", "Risk", "RunTask",
-        "ScientificConclusion", "ScientificDecision", "SuggestedPlan",
-        "TaskBundle", "ValidationResult",
+        "ScientificAction", "ScientificConclusion", "ScientificDecision",
+        "SearchLiteratureAction", "TaskBundle", "ValidationResult",
     ]
 
 
@@ -45,7 +46,7 @@ def test_cli_help_contract() -> None:
 
 def test_prompt_contracts() -> None:
     rendered = build_initial_prompt(AdvisorContext(situation="phase0 situation"))
-    assert _sha256(SYSTEM_PROMPT) == "c4143d24c6e63be591aeadc2e8010d7f028f2db38ba9dca6c70ddec9bc870b59"
+    assert _sha256(SYSTEM_PROMPT) == "edfe7301cb94a6837397737ccb75599f8d0bdba07a9ebf9cc73c4c935914e2f0"
     assert _sha256(rendered) == "84128b7d5013e99f22f18348ffe53722f13d0660f93e1c22ad8bdf627f551cbc"
 
 
@@ -55,16 +56,16 @@ def test_cross_module_model_field_contracts() -> None:
     ]
     assert list(ScientificDecision.model_fields) == [
         "summary", "confidence", "conclusion", "evidence", "experiment_plan",
-        "result_analysis", "failure_diagnosis", "recommended_actions", "risks",
-        "needs_user_input",
+        "result_analysis", "failure_diagnosis", "recommended_actions",
+        "analysis_required", "risks", "needs_user_input",
     ]
-    assert list(RecommendedAction.model_fields) == [
-        "priority", "type", "rationale", "plan", "action_id", "depends_on",
-        "project_ref", "workspace_intent", "required",
+    # V2 scientific action contract — a representative capability submodel
+    assert list(ExecuteExperimentAction.model_fields) == [
+        "action_id", "capability", "objective", "rationale", "depends_on",
+        "project_ref", "required", "success_criteria", "requires_gpu",
+        "expected_metrics",
     ]
-    assert list(SuggestedPlan.model_fields) == [
-        "kind", "code_availability", "task_goal", "constraints",
-        "verify_commands", "expected_artifacts", "paper_url", "repo_url",
-        "experiment_goal", "compute_budget", "expected_metrics", "command_goal",
-        "expected_runtime", "requires_gpu", "search_query", "question",
+    assert list(AnalyzeResultsAction.model_fields) == [
+        "action_id", "capability", "objective", "rationale", "depends_on",
+        "project_ref", "required", "success_criteria",
     ]
