@@ -17,7 +17,7 @@ from experiment_designer.models import (
     RunTask,
     TaskBundle,
 )
-from experiment_designer.validator import validate
+from experiment_designer.controller.validator import validate
 
 
 def _make_plan(**overrides) -> ExperimentPlan:

@@ -16,9 +16,9 @@ from pathlib import Path
 import pytest
 
 from experiment_designer.models import DesignInput, ComputeBudget, ExistingAssets, ExistingMethod
-from experiment_designer.planner import plan, revise
+from experiment_designer.controller.planner import plan, revise
 from experiment_designer.report import write_plan
-from experiment_designer.validator import validate
+from experiment_designer.controller.validator import validate
 
 
 # ── Skip marker ──────────────────────────────────────────────────
@@ -389,7 +389,7 @@ class TestAdvisorV2:
 
     def test_advise_design_experiment(self) -> None:
         """Direct advise() call for experiment design."""
-        from experiment_designer.advisor import advise
+        from experiment_designer.agent import advise
         from experiment_designer.models import AdvisorContext
 
         ctx = AdvisorContext(
@@ -408,7 +408,7 @@ class TestAdvisorV2:
 
     def test_advise_with_artifacts(self) -> None:
         """Advise with artifact references."""
-        from experiment_designer.advisor import advise
+        from experiment_designer.agent import advise
         from experiment_designer.models import AdvisorContext, ArtifactRef
 
         ctx = AdvisorContext(
@@ -431,9 +431,9 @@ class TestAdvisorV2:
 
     def test_advise_yields_validatable_decision(self) -> None:
         """Every advise() output should be structurally sound."""
-        from experiment_designer.advisor import advise
+        from experiment_designer.agent import advise
         from experiment_designer.models import AdvisorContext
-        from experiment_designer.validator import validate_decision
+        from experiment_designer.controller.validator import validate_decision
 
         ctx = AdvisorContext(
             situation=(
@@ -454,7 +454,7 @@ class TestAdvisorV2:
 
     def test_recommended_actions_self_contained(self) -> None:
         """Each recommended action must be self-contained for downstream agents."""
-        from experiment_designer.advisor import advise
+        from experiment_designer.agent import advise
         from experiment_designer.models import AdvisorContext
 
         ctx = AdvisorContext(

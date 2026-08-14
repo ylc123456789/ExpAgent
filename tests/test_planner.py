@@ -9,10 +9,10 @@ import pytest
 
 import experiment_designer.controller.loop as loop_mod
 import experiment_designer.llm as llm_mod
-from experiment_designer.advisor import advise
+from experiment_designer.agent import advise
 from experiment_designer.models import AdvisorContext, ComputeBudget, DesignInput
-from experiment_designer.planner import plan, revise
-from experiment_designer.validator import validate
+from experiment_designer.controller.planner import plan, revise
+from experiment_designer.controller.validator import validate
 
 
 class TestPlannerMock:
@@ -209,7 +209,7 @@ class TestActionDependencyMetadata:
             ScientificDecision, ScientificConclusion, EvidenceItem,
             ModifyCodeAction, ExecuteExperimentAction, AnalyzeResultsAction,
         )
-        from experiment_designer.validator import validate_decision
+        from experiment_designer.controller.validator import validate_decision
 
         sd = ScientificDecision(
             summary="Decision with dependency chain",
@@ -260,7 +260,7 @@ class TestActionDependencyMetadata:
             ScientificDecision, ScientificConclusion, EvidenceItem,
             ModifyCodeAction, ExecuteExperimentAction,
         )
-        from experiment_designer.validator import validate_decision
+        from experiment_designer.controller.validator import validate_decision
 
         sd = ScientificDecision(
             summary="Duplicate action_id test",
@@ -283,7 +283,7 @@ class TestActionDependencyMetadata:
             ScientificDecision, ScientificConclusion, EvidenceItem,
             AnalyzeResultsAction,
         )
-        from experiment_designer.validator import validate_decision
+        from experiment_designer.controller.validator import validate_decision
 
         sd = ScientificDecision(
             summary="Unknown dependency test",
@@ -324,7 +324,7 @@ class TestPlannerReviseMock:
 
     def test_revise_mock_returns_plan(self) -> None:
         """Revise should return a plan when called with mock."""
-        from experiment_designer.planner import revise
+        from experiment_designer.controller.planner import revise
         from experiment_designer.models import (
             ExperimentPlan, ResearchGoal, ExperimentMatrix, TaskBundle,
         )
@@ -346,7 +346,7 @@ class TestPlannerExtractYaml:
     """Tests for the YAML extraction logic."""
 
     def test_extract_fenced_yaml(self) -> None:
-        from experiment_designer.planner import _extract_yaml
+        from experiment_designer.controller.planner import _extract_yaml
         text = """Some text
 ```yaml
 version: 1
@@ -360,7 +360,7 @@ More text"""
         assert "More text" not in result
 
     def test_extract_generic_fence(self) -> None:
-        from experiment_designer.planner import _extract_yaml
+        from experiment_designer.controller.planner import _extract_yaml
         text = """```
 version: 1
 goal:
@@ -370,7 +370,7 @@ goal:
         assert "version: 1" in result
 
     def test_extract_raw_yaml(self) -> None:
-        from experiment_designer.planner import _extract_yaml
+        from experiment_designer.controller.planner import _extract_yaml
         text = "version: 1\ngoal:\n  summary: test"
         result = _extract_yaml(text)
         assert result.strip() == text.strip()
@@ -427,7 +427,7 @@ class TestSessionCard:
         run_dir.mkdir(parents=True, exist_ok=True)
 
         # max_steps=0 → loop never enters → exhausted immediately
-        from experiment_designer.advisor import advise
+        from experiment_designer.agent import advise
         from experiment_designer.models import AdvisorContext
 
         ctx = AdvisorContext(situation="TASK: Some task.")
@@ -457,7 +457,7 @@ class TestAdvisoryThread:
             "entries": [{"ts": "2026-08-10T00:00:00", "summary": "Prior finding: SE-block is the standard baseline."}]
         }), encoding="utf-8")
 
-        from experiment_designer.advisor import advise
+        from experiment_designer.agent import advise
         from experiment_designer.models import AdvisorContext
 
         ctx = AdvisorContext(
