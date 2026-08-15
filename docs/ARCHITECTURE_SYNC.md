@@ -137,8 +137,8 @@ experiment_designer/
 └── report.py            # experiment_plan.yaml + scientific_decision.json
 ```
 
-兼容性：`advisor.py` / `planner.py` / `validator.py` 是薄转发模块，保留旧导入路径
-(ResAgent 通过 `from experiment_designer.agent import advise` 调用)。
+兼容性：`advisor.py` / `planner.py` / `validator.py` 薄转发模块已于 V2 收尾时删除，
+导入路径以实现位置为准（ResAgent 通过 `from experiment_designer.agent import advise` 调用）。
 
 ## 8. 上下文管理
 
