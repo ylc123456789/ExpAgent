@@ -12,7 +12,7 @@ ExpAgent → situation + artifacts → agentic loop → ScientificDecision
 ## 2. Python API
 
 ```python
-from experiment_designer.advisor import advise
+from experiment_designer.agent import advise
 from experiment_designer.models import AdvisorContext, ArtifactRef
 
 ctx = AdvisorContext(
@@ -138,7 +138,7 @@ experiment_designer/
 ```
 
 兼容性：`advisor.py` / `planner.py` / `validator.py` 是薄转发模块，保留旧导入路径
-(ResAgent 通过 `from experiment_designer.advisor import advise` 调用)。
+(ResAgent 通过 `from experiment_designer.agent import advise` 调用)。
 
 ## 8. 上下文管理
 

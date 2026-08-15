@@ -157,7 +157,7 @@ runs/<timestamp>/
 ## 10. Python API
 
 ```python
-from experiment_designer.advisor import advise
+from experiment_designer.agent import advise
 from experiment_designer.models import AdvisorContext
 
 ctx = AdvisorContext(situation="描述当前研究情况...")
