@@ -20,6 +20,7 @@ from experiment_designer.models import (
     ExecuteExperimentAction,
     ModifyCodeAction,
     ReproduceExperimentAction,
+    ResultAnalysis,
     ScientificAction,
     ScientificConclusion,
     ScientificDecision,
@@ -214,6 +215,52 @@ def test_required_false_accepted() -> None:
     assert decision.recommended_actions[0].required is False
 
 
+def test_terminal_result_analysis_allows_empty_future_actions_in_chinese() -> None:
+    decision = ScientificDecision(
+        summary="现有证据已经足以支持该结论",
+        confidence="high",
+        conclusion=ScientificConclusion(
+            status="supported",
+            rationale="实验结果一致支持假设，无需为了重复当前分析而创建新任务。",
+        ),
+        evidence=[EvidenceItem(source="artifact", description="指标达到预设标准。")],
+        result_analysis=ResultAnalysis(summary="结果支持假设", findings=["指标达标"]),
+        recommended_actions=[],
+        risks=["样本规模有限"],
+    )
+
+    assert validate_decision(decision).status == "ok"
+
+
+def test_terminal_result_analysis_rejects_required_future_work() -> None:
+    decision = ScientificDecision(
+        summary="The supplied results support the hypothesis.",
+        confidence="high",
+        conclusion=ScientificConclusion(status="supported", rationale="Evidence is sufficient."),
+        evidence=[EvidenceItem(source="artifact", description="Metric met the target.")],
+        result_analysis=ResultAnalysis(summary="Supported", findings=["Target met"]),
+        recommended_actions=[_execute_action("repeat_current_analysis", required=True)],
+        analysis_required=False,
+        risks=["Bounded evidence"],
+    )
+
+    vr = validate_decision(decision)
+    assert vr.status == "needs_revision"
+    assert any("terminal supported/not_supported conclusion" in issue for issue in vr.issues)
+
+
+def test_supersedes_action_ids_are_explicit_and_disjoint() -> None:
+    valid = _make_decision([])
+    valid.supersedes_action_ids = ["old_run"]
+    assert validate_decision(valid).status == "ok"
+
+    invalid = _make_decision([_execute_action("same")], analysis_required=False)
+    invalid.supersedes_action_ids = ["same"]
+    vr = validate_decision(invalid)
+    assert vr.status == "needs_revision"
+    assert any("cannot also be emitted" in issue for issue in vr.issues)
+
+
 # ── Physical field boundary ───────────────────────────────────────
 
 
@@ -244,6 +291,7 @@ def test_finish_schema_has_v2_capabilities() -> None:
     action_schema = params["recommended_actions"]["items"]
     assert action_schema["properties"]["capability"]["enum"] == ALL_CAPABILITIES
     assert "analysis_required" in params
+    assert "supersedes_action_ids" in params
 
 
 def test_mock_output_follows_contract() -> None:

@@ -46,7 +46,7 @@ def test_cli_help_contract() -> None:
 
 def test_prompt_contracts() -> None:
     rendered = build_initial_prompt(AdvisorContext(situation="phase0 situation"))
-    assert _sha256(SYSTEM_PROMPT) == "df7aa38d9fa2abe84212b221e8b78ae69cae86c8f5b50027f0bef108787d9b30"
+    assert _sha256(SYSTEM_PROMPT) == "224019601668bca471b0befc6c8e5ac576bf3de500334d3dbb2b0d09f17e1a01"
     assert _sha256(rendered) == "84128b7d5013e99f22f18348ffe53722f13d0660f93e1c22ad8bdf627f551cbc"
 
 
@@ -57,7 +57,7 @@ def test_cross_module_model_field_contracts() -> None:
     assert list(ScientificDecision.model_fields) == [
         "summary", "confidence", "conclusion", "evidence", "experiment_plan",
         "result_analysis", "failure_diagnosis", "recommended_actions",
-        "analysis_required", "risks", "needs_user_input",
+        "supersedes_action_ids", "analysis_required", "risks", "needs_user_input",
     ]
     # V2 scientific action contract — a representative capability submodel
     assert list(ExecuteExperimentAction.model_fields) == [

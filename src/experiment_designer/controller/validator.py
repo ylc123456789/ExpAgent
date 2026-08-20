@@ -223,6 +223,41 @@ def _validate_analysis_coverage(decision: ScientificDecision) -> list[str]:
     return issues
 
 
+def _validate_decision_lifecycle(decision: ScientificDecision) -> list[str]:
+    """Validate future-work and explicit replacement semantics."""
+    issues: list[str] = []
+
+    supersedes = decision.supersedes_action_ids
+    if any(not action_id.strip() for action_id in supersedes):
+        issues.append("supersedes_action_ids must contain only non-empty action_ids")
+    if len(set(supersedes)) != len(supersedes):
+        issues.append("supersedes_action_ids contains duplicates")
+
+    new_ids = {action.action_id for action in decision.recommended_actions}
+    overlap = sorted(new_ids.intersection(supersedes))
+    if overlap:
+        issues.append(
+            "supersedes_action_ids cannot also be emitted as new actions: "
+            + ", ".join(overlap)
+        )
+
+    terminal_conclusion = (
+        decision.conclusion is not None
+        and decision.conclusion.status in {"supported", "not_supported"}
+    )
+    if terminal_conclusion:
+        required = [
+            action.action_id for action in decision.recommended_actions
+            if action.required
+        ]
+        if required:
+            issues.append(
+                "A terminal supported/not_supported conclusion may only recommend optional future "
+                "actions; required actions found: " + ", ".join(required)
+            )
+    return issues
+
+
 def validate_decision(decision: ScientificDecision) -> ValidationResult:
     """Validate a ScientificDecision for structural completeness.
 
@@ -249,11 +284,6 @@ def validate_decision(decision: ScientificDecision) -> ValidationResult:
     # Evidence
     if not decision.evidence:
         issues.append("evidence is empty — must cite at least one piece of evidence supporting the conclusion")
-
-    # Recommended actions — can be empty but should explain why
-    if not decision.recommended_actions and decision.conclusion is not None:
-        if "no action" not in decision.conclusion.rationale.lower():
-            issues.append("recommended_actions is empty — if no actions are needed, explain why in the conclusion")
 
     # Each action's capability-specific fields
     for i, action in enumerate(decision.recommended_actions):
@@ -287,6 +317,7 @@ def validate_decision(decision: ScientificDecision) -> ValidationResult:
     # Action dependency metadata + analysis coverage
     issues.extend(_validate_action_dependencies(decision))
     issues.extend(_validate_analysis_coverage(decision))
+    issues.extend(_validate_decision_lifecycle(decision))
 
     # Experiment plan (when present, must be complete)
     if decision.experiment_plan is not None:

@@ -390,8 +390,14 @@ class ScientificDecision(BaseModel):
 
     recommended_actions: list[ScientificAction] = Field(
         default_factory=list,
-        description="Logical scientific action graph. Each element is a typed "
-                    "ScientificAction discriminated on capability.",
+        description="Future work after this decision. Each element is a typed "
+                    "ScientificAction discriminated on capability; work already "
+                    "performed by this advisory call must not be repeated here.",
+    )
+    supersedes_action_ids: list[str] = Field(
+        default_factory=list,
+        description="Logical action_ids from an earlier plan that this decision "
+                    "explicitly replaces. Empty means append-only.",
     )
     analysis_required: bool = Field(
         default=True,
@@ -408,5 +414,4 @@ class ScientificDecision(BaseModel):
         default_factory=list,
         description="Questions that need human answers before proceeding",
     )
-
 

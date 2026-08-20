@@ -171,6 +171,8 @@ def _run_loop(ctx, model, api_base, api_key_env, mock, trace_dir, policy, run_di
                         result_analysis=args.get("result_analysis"),
                         failure_diagnosis=args.get("failure_diagnosis"),
                         recommended_actions=args.get("recommended_actions", []),
+                        supersedes_action_ids=args.get("supersedes_action_ids", []),
+                        analysis_required=args.get("analysis_required", True),
                         risks=args.get("risks", []),
                         needs_user_input=args.get("needs_user_input", []),
                     )

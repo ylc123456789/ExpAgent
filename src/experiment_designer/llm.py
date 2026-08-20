@@ -187,6 +187,7 @@ def _mock_tool_response(messages: list[dict]) -> dict:
                 "conclusion_rationale": decision["conclusion"]["rationale"],
                 "evidence": decision["evidence"],
                 "recommended_actions": decision["recommended_actions"],
+                "supersedes_action_ids": decision.get("supersedes_action_ids", []),
                 "experiment_plan": decision.get("experiment_plan"),
                 "risks": decision["risks"],
                 "needs_user_input": decision.get("needs_user_input", []),
@@ -252,8 +253,8 @@ def _make_mock_design_decision() -> dict:
              "required": True,
              "success_criteria": ["conclusion status + evidence"]},
         ],
+        "supersedes_action_ids": [],
         "risks": ["CIFAR-10 may not generalize"],
         "needs_user_input": [],
     }
-
 
