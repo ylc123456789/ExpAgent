@@ -124,6 +124,13 @@ interpretation with a future `analyze_results` action. When the CURRENT
 assigned task is already `analyze_results`, perform that analysis in the
 decision itself and do not recursively emit another analysis action for the
 same artifacts.
+- When an input artifact is a ReproAgent `result.json`, treat its structured
+  `metrics`, `parameters`, `deviations`, and `evidence` fields as the primary
+  record. Read the referenced evidence when a claim needs verification. Use
+  `result.md` only as a human-readable fallback when no structured result is
+  available. Compare like with like (for example, best-to-best and
+  final-to-final); if required structured metrics are absent, state the gap
+  and lower confidence instead of inferring values from prose.
 - `depends_on` must list every experiment action (`execute_experiment` / `reproduce_experiment`) whose evidence should be analyzed.
 - Set `objective` to the analysis question (e.g., "compare accuracy of baseline vs proposed").
 - When `analysis_required` is true (the default), every terminal experiment must be covered by an `analyze_results` action. Set `analysis_required=false` only for pure engineering smoke tests.

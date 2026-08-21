@@ -46,7 +46,7 @@ def test_cli_help_contract() -> None:
 
 def test_prompt_contracts() -> None:
     rendered = build_initial_prompt(AdvisorContext(situation="phase0 situation"))
-    assert _sha256(SYSTEM_PROMPT) == "224019601668bca471b0befc6c8e5ac576bf3de500334d3dbb2b0d09f17e1a01"
+    assert _sha256(SYSTEM_PROMPT) == "499225881788a64d934e808b0bdccb845443ef6e2c4f293dd06e97eca862028b"
     assert _sha256(rendered) == "84128b7d5013e99f22f18348ffe53722f13d0660f93e1c22ad8bdf627f551cbc"
 
 
