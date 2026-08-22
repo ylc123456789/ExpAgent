@@ -68,21 +68,6 @@ def _key_artifacts(run_dir: Path) -> list[dict]:
     return artifacts
 
 
-def list_run_files(run_dir: Path) -> list[str]:
-    """Return relative paths of all files ExpAgent wrote in a run directory.
-
-    Useful for orchestrators (ResAgent) to discover produced artifacts
-    without knowing ExpAgent's internal file layout.
-    """
-    if not run_dir.exists():
-        return []
-    result: list[str] = []
-    for p in sorted(run_dir.rglob("*")):
-        if p.is_file():
-            result.append(str(p.relative_to(run_dir)))
-    return result
-
-
 def write_state(
     run_dir: Path,
     situation: str,
