@@ -103,15 +103,15 @@ ResAgent.adapter.advise()
 - 处理：**删除**。
 - 分类：安全整理。
 
-### 6.2 双主线 / 所有权（Split Mainline / Ownership）——行为风险，仅报告
+### 6.2 双主线 / 所有权（Split Mainline / Ownership）——后续独立迁移
 
 **E1 — 旧 `ExperimentPlan`/`TaskBundle`/`plan()`/`revise()` 与 V2 `recommended_actions` 双表示并存**
 - 现状：`ScientificDecision` 同时携带 `experiment_plan`（ExperimentPlan：goal/matrix/metrics/tasks/analysis_plan/risks）与 `recommended_actions`（V2 科学动作图）。`planner.plan()/revise()` 又把 `recommended_actions` 反投影成 `TaskBundle`（`_extract_coding/repro/run_tasks`，`planner.py:79-125`）。
 - 真实调用路径：`plan()/revise()` 仅被 ExpAgent 自己的 `main.py`（`--no-interactive`）与 `repl.py` 使用；**跨模块无消费者**（ResAgent 直接消费 `advise()` 的 `ScientificDecision`，不碰 ExperimentPlan）。
 - 为什么是问题：同一"下一步做什么"存在两套模型 + 一套派生视图；`analyze_results/search_literature/ask_user` 三类 capability 在 TaskBundle 反投影中被丢弃；`CodingTask.workspace_path` 字段（`models.py:105`）与 V2 "不输出物理路径" 原则相悖。
 - 是否改变行为：若删除会改变 CLI/REPL 行为。
-- 处理：**仅报告**。建议二选一：(a) 下线 `ExperimentPlan`/`TaskBundle`/`plan()/revise()/REPL` 旧设计入口，REPL 改为直接渲染 `recommended_actions`；(b) 保留但明确其为"仅人类展示层"，并在文档标注调用者。
-- 分类：行为风险（需单独审批）。
+- 处理：**后续独立迁移**（设计见 `docs/E1_MAINLINE_CONVERGENCE_DESIGN.md`），不在本分支实现。这不是本轮待删除的死代码：旧设计入口仍被 CLI/REPL 使用，删除前须先完成 CLI/REPL 直连 `advise()` 的迁移与契约测试。
+- 分类：行为风险（独立迁移任务）。
 
 **E2 — action graph 的 schema / 模型 / 校验规则三处重复表达**
 - 现状：六类 capability 词表同时出现在 (1) `models.py` 的 discriminated union `ScientificAction`；(2) `prompts/schemas.py::_SCIENTIFIC_ACTION_SCHEMA`（FC JSON schema，扁平对象）；(3) `validator.py:289-311` 的 capability 专属字段校验。`validate()`（旧计划校验，`validator.py:12-117`）与 `validate_decision()`（V2，`validator.py:261-337`）是两套校验器。
@@ -163,10 +163,12 @@ ResAgent.adapter.advise()
 | 1 | remove unused legacy yaml extractor | 删 `planner.py::_extract_yaml` + `TestPlannerExtractYaml` | 安全整理 |
 | 2 | remove unreachable list_run_files helper | 删 `session.py::list_run_files` | 安全整理 |
 
-**不处理**（行为风险/收益低）：E1（双主线）、E2（三处词表）、R1（手写 YAML 解析）、R2（slugify 重复）、D3（文档）。
+**本轮不处理**：
+- E1（双主线）→ 另立为独立迁移任务，设计见 `docs/E1_MAINLINE_CONVERGENCE_DESIGN.md`。
+- E2（三处词表）、R1（手写 YAML 解析）、R2（slugify 重复）、D3（文档）→ 低收益/文档类，暂缓。
 
 ## 9. 未处理风险
 
-- E1 是唯一会改变 CLI/REPL 行为的结构项，需总体审查决定是否下线旧设计入口。
+- E1（双主线）已标记为**后续独立迁移**，不在本分支实现（设计见 `docs/E1_MAINLINE_CONVERGENCE_DESIGN.md`）。迁移会触碰 `ScientificDecision.experiment_plan` 字段与 phase0 冻结契约，需总体审查 + 更新 phase0 lock。
 - 跨模块契约（V2 action contract、`AdvisorContext`/`ArtifactRef`、session.yaml schema）本轮未触碰。
 - Prompt 未改动（`SYSTEM_PROMPT` hash 不变）。
