@@ -342,40 +342,6 @@ class TestPlannerReviseMock:
         assert revised.version == 1
 
 
-class TestPlannerExtractYaml:
-    """Tests for the YAML extraction logic."""
-
-    def test_extract_fenced_yaml(self) -> None:
-        from experiment_designer.controller.planner import _extract_yaml
-        text = """Some text
-```yaml
-version: 1
-goal:
-  summary: test
-```
-More text"""
-        result = _extract_yaml(text)
-        assert "version: 1" in result
-        assert "Some text" not in result
-        assert "More text" not in result
-
-    def test_extract_generic_fence(self) -> None:
-        from experiment_designer.controller.planner import _extract_yaml
-        text = """```
-version: 1
-goal:
-  summary: test
-```"""
-        result = _extract_yaml(text)
-        assert "version: 1" in result
-
-    def test_extract_raw_yaml(self) -> None:
-        from experiment_designer.controller.planner import _extract_yaml
-        text = "version: 1\ngoal:\n  summary: test"
-        result = _extract_yaml(text)
-        assert result.strip() == text.strip()
-
-
 class TestPlannerTraceDir:
     """Tests for trace file writing."""
 

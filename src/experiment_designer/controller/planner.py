@@ -157,26 +157,3 @@ def revise(
         return _populate_tasks_from_actions(decision.experiment_plan, decision.recommended_actions), [f"confidence: {decision.confidence}"]
 
     return current_plan, ["Revision did not produce a new experiment plan"]
-
-
-def _extract_yaml(text: str) -> str:
-    """Extract YAML content from an LLM response (backward-compat re-export)."""
-    if "```yaml" in text:
-        start = text.index("```yaml") + len("```yaml")
-        try:
-            end = text.index("```", start)
-            return text[start:end].strip()
-        except ValueError:
-            return text[start:].strip()
-    if "```" in text:
-        start = text.index("```") + 3
-        remaining = text[start:]
-        nl = remaining.find("\n")
-        if nl != -1:
-            start = start + nl + 1
-        try:
-            end = text.index("```", start)
-            return text[start:end].strip()
-        except ValueError:
-            return text[start:].strip()
-    return text.strip()
